@@ -2,7 +2,7 @@
 
 > 本项目是基于经典 [**小丸工具箱**](https://maruko.appinn.me/) 的理念重做现代化版本：保留「简单易用的压制工具箱」这一核心体验，用 WinUI 3 全面重构，并加入 GPU 硬件加速与内置 ffmpeg。
 
-基于 [**ffmpeg**](https://ffmpeg.org/) 的 Windows 桌面多媒体处理工具箱，使用 **WinUI 3** + **.NET 10** 构建，走 **unpackaged（免 MSIX / 免商店）** 部署路线，安装无需管理员权限、无需代码签名。
+基于 [**ffmpeg**](https://ffmpeg.org/) 的 Windows 桌面多媒体处理工具箱，使用 **WinUI 3** + **.NET 10** 构建。
 
 ## 界面预览
 
