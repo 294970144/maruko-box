@@ -1,0 +1,46 @@
+# ============================================================
+# 小丸工具箱 (MarukoBox) — .gitignore
+# 仓库只保留源码与构建脚本；所有二进制/构建产物均不入库
+# ============================================================
+
+# --- .NET / MSBuild 构建产物 ---
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+
+# --- 安装包 / 发布产物（体积大，可用构建脚本一键重建）---
+dist/
+payload/
+artifacts/
+
+# --- Visual Studio / Rider / IDE ---
+.vs/
+.idea/
+*.user
+*.suo
+*.userprefs
+.vsconfig
+
+# --- Windows 应用打包（MSIX，本项目走 unpackaged） ---
+AppPackages/
+BundleArtifacts/
+Package.StoreAssociation.xml
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+
+# --- 日志 / 临时 ---
+*.log
+*.tmp
+
+# --- 操作系统 ---
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# --- 注意：以下均保留入库 ---
+#   *.cs  *.csproj  *.sln
+#   Installer-Inno/*.iss  *.ps1
+#   *.md  .gitignore

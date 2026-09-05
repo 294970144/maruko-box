@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "MarukoBox (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "MarukoBox (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

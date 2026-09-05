@@ -1,0 +1,121 @@
+using Microsoft.UI;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Data;
+using Microsoft.UI.Xaml.Media;
+using MarukoBox.Models;
+
+namespace MarukoBox.Converters;
+
+/// <summary>
+/// 将检测是否成功（bool）映射为 InfoBar 的严重度。
+/// </summary>
+public sealed class BoolToInfoBarSeverity : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+        => value is true ? InfoBarSeverity.Success : InfoBarSeverity.Error;
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => value is InfoBarSeverity.Success;
+}
+
+/// <summary>
+/// 将检测是否成功（bool）映射为 FontIcon 的字形（对勾 / 警告）。
+/// </summary>
+public sealed class BoolToGlyph : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+        => value is true ? "\uE73E" : "\uE783";
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
+/// 将 bool 映射为可见性（true→Visible）。
+/// </summary>
+public sealed class BoolToVisibility : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+        => value is true ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => value is Visibility.Visible;
+}
+
+/// <summary>
+/// 将 bool 取反（true→false）。
+/// </summary>
+public sealed class InvertBool : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+        => value is not true;
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => value is not true;
+}
+
+/// <summary>
+/// 将 bool 取反后映射为可见性（true→Collapsed）。
+/// 用于「未勾选时显示」的场景。
+/// </summary>
+public sealed class InvertBoolToVisibility : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+        => value is true ? Visibility.Collapsed : Visibility.Visible;
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => value is not Visibility.Visible;
+}
+
+/// <summary>
+/// 将媒体流类型映射为色标画刷（视频=绿 / 音频=蓝 / 字幕=橙 / 其它=灰）。
+/// 用于「抽取」页轨道列表的类型标签。
+/// </summary>
+public sealed class StreamTypeToBrush : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        if (value is StreamType t)
+        {
+            return t switch
+            {
+                StreamType.Video => new SolidColorBrush(ColorHelper.FromArgb(255, 122, 199, 122)),
+                StreamType.Audio => new SolidColorBrush(ColorHelper.FromArgb(255, 122, 162, 232)),
+                StreamType.Subtitle => new SolidColorBrush(ColorHelper.FromArgb(255, 232, 170, 92)),
+                _ => new SolidColorBrush(ColorHelper.FromArgb(255, 150, 150, 150))
+            };
+        }
+
+        return new SolidColorBrush(Colors.Gray);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
+/// 将封装输入类型（<see cref="MuxKind"/>）映射为色标画刷（视频=绿 / 音频=蓝 / 字幕=橙）。
+/// 配色与 <see cref="StreamTypeToBrush"/> 对齐，用于「封装」页轨道列表的类型标签。
+/// </summary>
+public sealed class MuxKindToBrush : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        if (value is MuxKind k)
+        {
+            return k switch
+            {
+                MuxKind.Video => new SolidColorBrush(ColorHelper.FromArgb(255, 122, 199, 122)),
+                MuxKind.Audio => new SolidColorBrush(ColorHelper.FromArgb(255, 122, 162, 232)),
+                MuxKind.Subtitle => new SolidColorBrush(ColorHelper.FromArgb(255, 232, 170, 92)),
+                _ => new SolidColorBrush(ColorHelper.FromArgb(255, 150, 150, 150))
+            };
+        }
+
+        return new SolidColorBrush(Colors.Gray);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}

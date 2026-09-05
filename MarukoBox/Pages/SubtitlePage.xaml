@@ -1,0 +1,227 @@
+<Page
+    x:Class="MarukoBox.Pages.SubtitlePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:MarukoBox.Pages"
+    xmlns:models="using:MarukoBox.Models"
+    xmlns:conv="using:MarukoBox.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d" NavigationCacheMode="Required">
+
+    <Page.Resources>
+        <conv:StreamTypeToBrush x:Key="StreamTypeToBrush" />
+        <conv:BoolToVisibility x:Key="BoolToVisibility" />
+        <conv:InvertBool x:Key="InvertBool" />
+        <conv:InvertBoolToVisibility x:Key="InvertBoolToVisibility" />
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" Padding="24">
+            <StackPanel>
+                <TextBlock Text="字幕" Style="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock Text="从视频抽取字幕流、将外部字幕嵌入视频、或在 srt / ass / vtt 之间转换" Opacity="0.7" />
+            </StackPanel>
+
+            <!-- 输出文件夹（抽取 / 嵌入 / 转换共用，留空则输出到源文件同目录） -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="输出文件夹" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Text="{x:Bind ViewModel.OutputDir, Mode=TwoWay}"
+                                 PlaceholderText="留空则输出到源文件同目录" />
+                        <Button Grid.Column="1" Content="浏览"
+                                Command="{x:Bind ViewModel.BrowseOutputCommand, Mode=OneWay}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 抽取区 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="① 抽取字幕流" Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="视频文件" Opacity="0.8" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{x:Bind ViewModel.ExtractVideo, Mode=TwoWay}" PlaceholderText="选择含字幕轨的视频" />
+                            <Button Grid.Column="1" Content="浏览…" Click="BrowseExtractVideo_Click" />
+                        </Grid>
+                    </StackPanel>
+
+                    <Button Content="分析字幕流" Style="{StaticResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.AnalyzeCommand, Mode=OneWay}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InvertBool}}"
+                            HorizontalAlignment="Stretch" />
+
+                    <Grid ColumnSpacing="8" Visibility="{x:Bind ViewModel.HasSubtitleStreams, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="选择要抽取的字幕轨" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <Button Grid.Column="1" Content="全选" Command="{x:Bind ViewModel.SelectAllCommand, Mode=OneWay}" />
+                        <Button Grid.Column="2" Content="全不选" Command="{x:Bind ViewModel.SelectNoneCommand, Mode=OneWay}" />
+                    </Grid>
+
+                    <ListView ItemsSource="{x:Bind ViewModel.SubtitleStreams, Mode=OneWay}" MaxHeight="320"
+                              Visibility="{x:Bind ViewModel.HasSubtitleStreams, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:MediaStreamInfo">
+                                <Grid ColumnSpacing="12" Padding="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" VerticalAlignment="Center" />
+
+                                    <Border Grid.Column="1" Background="{x:Bind Type, Mode=OneWay, Converter={StaticResource StreamTypeToBrush}}"
+                                            CornerRadius="4" Padding="8,3" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind TypeLabel}" FontSize="12" Foreground="Black" FontWeight="SemiBold" />
+                                    </Border>
+
+                                    <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Codec}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{x:Bind Detail}" FontSize="12" Opacity="0.7" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Column="3" Text="{x:Bind Language}" FontSize="12" Opacity="0.7"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <TextBlock Text="尚未分析字幕流，请先选择视频并点击「分析字幕流」"
+                               Opacity="0.6"
+                               Visibility="{x:Bind ViewModel.HasSubtitleStreams, Mode=OneWay, Converter={StaticResource InvertBoolToVisibility}}" />
+
+                    <Button Content="抽取选中字幕" HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.ExtractCommand, Mode=OneWay}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InvertBool}}" />
+                </StackPanel>
+            </Border>
+
+            <!-- 嵌入区 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="② 嵌入字幕" Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="视频文件" Opacity="0.8" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{x:Bind ViewModel.EmbedVideo, Mode=TwoWay}" PlaceholderText="选择视频" />
+                            <Button Grid.Column="1" Content="浏览…" Click="BrowseEmbedVideo_Click" />
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="字幕文件（srt / ass / vtt / ssa 等）" Opacity="0.8" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{x:Bind ViewModel.EmbedSubtitle, Mode=TwoWay}" PlaceholderText="选择外部字幕" />
+                            <Button Grid.Column="1" Content="浏览…" Click="BrowseEmbedSubtitle_Click" />
+                        </Grid>
+                    </StackPanel>
+
+                    <Button Content="嵌入字幕（输出 _withsub.mkv）" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.EmbedCommand, Mode=OneWay}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InvertBool}}" />
+                </StackPanel>
+            </Border>
+
+            <!-- 转换区 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="③ 字幕格式转换" Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="源字幕文件" Opacity="0.8" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{x:Bind ViewModel.ConvertInput, Mode=TwoWay}" PlaceholderText="选择要转换的字幕" />
+                            <Button Grid.Column="1" Content="浏览…" Click="BrowseConvert_Click" />
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="目标格式" Opacity="0.8" />
+                        <ComboBox ItemsSource="{x:Bind ViewModel.TargetFormatOptions, Mode=OneWay}"
+                                  SelectedValue="{x:Bind ViewModel.SelectedTargetFormat, Mode=TwoWay}"
+                                  SelectedValuePath="Value" DisplayMemberPath="Name"
+                                  HorizontalAlignment="Stretch" />
+                    </StackPanel>
+
+                    <Button Content="转换格式（输出 _conv.后缀）" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.ConvertCommand, Mode=OneWay}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InvertBool}}" />
+                </StackPanel>
+            </Border>
+
+            <!-- 共享进度区 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" />
+
+                    <ProgressBar Value="{x:Bind ViewModel.Progress.Percent, Mode=OneWay}" Maximum="100" Height="8" />
+
+                    <Grid ColumnSpacing="12" RowSpacing="4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="进度" Opacity="0.7" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind ViewModel.Progress.Percent, Mode=OneWay, FallbackValue=0}" HorizontalTextAlignment="Right" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="速度" Opacity="0.7" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.Progress.Speed, Mode=OneWay}" HorizontalTextAlignment="Right" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="码率" Opacity="0.7" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.Progress.BitrateKbps, Mode=OneWay}" HorizontalTextAlignment="Right" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="剩余" Opacity="0.7" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind ViewModel.Progress.Remaining, Mode=OneWay}" HorizontalTextAlignment="Right" />
+                    </Grid>
+
+                    <Button Content="取消" HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.CancelCommand, Mode=OneWay}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

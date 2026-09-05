@@ -1,0 +1,180 @@
+<Page
+    x:Class="MarukoBox.Pages.ImagePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:MarukoBox.Pages"
+    xmlns:conv="using:MarukoBox.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d" NavigationCacheMode="Required">
+
+    <Page.Resources>
+        <conv:BoolToVisibility x:Key="BoolToVisibility" />
+        <conv:InvertBool x:Key="InvertBool" />
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" Padding="24">
+            <StackPanel>
+                <TextBlock Text="图片" Style="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock Text="视频抽帧 · 图片格式转换" Opacity="0.7" />
+            </StackPanel>
+
+            <!-- 视频抽帧 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="视频抽帧" Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="源视频" Opacity="0.8" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{x:Bind ViewModel.InputVideo, Mode=TwoWay}" PlaceholderText="选择要抽帧的视频文件" />
+                            <Button Grid.Column="1" Content="浏览…" Click="BrowseVideo_Click" />
+                        </Grid>
+                    </StackPanel>
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Spacing="6">
+                            <TextBlock Text="抽帧模式" Opacity="0.8" />
+                            <ComboBox ItemsSource="{x:Bind ViewModel.ModeOptions, Mode=OneWay}"
+                                      DisplayMemberPath="Name" SelectedValuePath="Value"
+                                      SelectedValue="{x:Bind ViewModel.SelectedMode, Mode=TwoWay}"
+                                      HorizontalAlignment="Stretch" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="6">
+                            <TextBlock Text="输出格式" Opacity="0.8" />
+                            <ComboBox ItemsSource="{x:Bind ViewModel.FormatOptions, Mode=OneWay}"
+                                      DisplayMemberPath="Name" SelectedValuePath="Value"
+                                      SelectedValue="{x:Bind ViewModel.SelectedFormat, Mode=TwoWay}"
+                                      HorizontalAlignment="Stretch" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Spacing="6">
+                            <TextBlock Text="截图时间（秒，单张模式）" Opacity="0.8" />
+                            <TextBox Text="{x:Bind ViewModel.TimeSecondsText, Mode=TwoWay}" PlaceholderText="0" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="6">
+                            <TextBlock Text="间隔（秒，序列帧模式）" Opacity="0.8" />
+                            <TextBox Text="{x:Bind ViewModel.IntervalSecondsText, Mode=TwoWay}" PlaceholderText="5" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Spacing="6">
+                            <TextBlock Text="缩放宽度（留空不缩放）" Opacity="0.8" />
+                            <TextBox Text="{x:Bind ViewModel.ScaleWidthText, Mode=TwoWay}" PlaceholderText="如 1280" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="6">
+                            <TextBlock Text="缩放高度（留空不缩放）" Opacity="0.8" />
+                            <TextBox Text="{x:Bind ViewModel.ScaleHeightText, Mode=TwoWay}" PlaceholderText="如 720" />
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="输出目录" Opacity="0.8" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{x:Bind ViewModel.OutputDir, Mode=TwoWay}" PlaceholderText="留空则输出到源视频同目录" />
+                            <Button Grid.Column="1" Content="浏览…" Click="BrowseOutput_Click" />
+                        </Grid>
+                    </StackPanel>
+
+                    <Button Content="开始抽帧" Style="{StaticResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.ExtractFramesCommand, Mode=OneWay}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InvertBool}}"
+                            HorizontalAlignment="Stretch" />
+                </StackPanel>
+            </Border>
+
+            <!-- 图片转码 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="图片转码" Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="源图片" Opacity="0.8" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{x:Bind ViewModel.InputImage, Mode=TwoWay}" PlaceholderText="选择要转换的图片文件" />
+                            <Button Grid.Column="1" Content="浏览…" Click="BrowseImage_Click" />
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="目标格式" Opacity="0.8" />
+                        <ComboBox ItemsSource="{x:Bind ViewModel.ImageFormatOptions, Mode=OneWay}"
+                                  DisplayMemberPath="Name" SelectedValuePath="Value"
+                                  SelectedValue="{x:Bind ViewModel.SelectedImageFormat, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch" />
+                    </StackPanel>
+
+                    <Button Content="开始转码" Style="{StaticResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.ConvertImageCommand, Mode=OneWay}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InvertBool}}"
+                            HorizontalAlignment="Stretch" />
+                </StackPanel>
+            </Border>
+
+            <!-- 进度 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" />
+                    <ProgressBar Value="{x:Bind ViewModel.Progress.Percent, Mode=OneWay}" Maximum="100" Height="8" />
+                    <Grid ColumnSpacing="12" RowSpacing="4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="进度" Opacity="0.7" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind ViewModel.Progress.Percent, Mode=OneWay, FallbackValue=0}" HorizontalTextAlignment="Right" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="速度" Opacity="0.7" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.Progress.Speed, Mode=OneWay}" HorizontalTextAlignment="Right" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="码率" Opacity="0.7" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.Progress.BitrateKbps, Mode=OneWay}" HorizontalTextAlignment="Right" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="剩余" Opacity="0.7" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind ViewModel.Progress.Remaining, Mode=OneWay}" HorizontalTextAlignment="Right" />
+                    </Grid>
+                    <Button Content="取消" HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.CancelCommand, Mode=OneWay}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

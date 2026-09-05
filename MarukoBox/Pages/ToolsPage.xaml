@@ -1,0 +1,108 @@
+<Page
+    x:Class="MarukoBox.Pages.ToolsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:MarukoBox.Pages"
+    xmlns:models="using:MarukoBox.Models"
+    xmlns:conv="using:MarukoBox.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d" NavigationCacheMode="Required">
+
+    <Page.Resources>
+        <conv:StreamTypeToBrush x:Key="StreamTypeToBrush" />
+        <conv:BoolToVisibility x:Key="BoolToVisibility" />
+        <conv:InvertBool x:Key="InvertBool" />
+        <conv:InvertBoolToVisibility x:Key="InvertBoolToVisibility" />
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" Padding="24">
+            <StackPanel>
+                <TextBlock Text="工具" Style="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock Text="媒体信息查看 · 容器与流分析" Opacity="0.7" />
+            </StackPanel>
+
+            <!-- 选择 + 查看 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="媒体文件" Opacity="0.8" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Text="{x:Bind ViewModel.InputFile, Mode=TwoWay}" PlaceholderText="选择视频 / 音频 / 字幕等媒体文件" />
+                            <Button Grid.Column="1" Content="浏览…" Click="Browse_Click" />
+                        </Grid>
+                    </StackPanel>
+
+                    <Button Content="查看媒体信息" Style="{StaticResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.ProbeCommand, Mode=OneWay}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InvertBool}}"
+                            HorizontalAlignment="Stretch" />
+                </StackPanel>
+            </Border>
+
+            <!-- 信息展示 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="12">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="总时长" Opacity="0.7" />
+                            <TextBlock Text="{x:Bind ViewModel.Info.DurationText, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Text="流数量" Opacity="0.7" />
+                            <TextBlock Text="{x:Bind ViewModel.Info.StreamCountText, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="流列表" Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+                    <ListView ItemsSource="{x:Bind ViewModel.Info.Streams, Mode=OneWay}" MaxHeight="360"
+                              Visibility="{x:Bind ViewModel.HasInfo, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:MediaStreamInfo">
+                                <Grid ColumnSpacing="12" Padding="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{x:Bind Index}" VerticalAlignment="Center" Opacity="0.6" />
+                                    <Border Grid.Column="1"
+                                            Background="{x:Bind Type, Mode=OneWay, Converter={StaticResource StreamTypeToBrush}}"
+                                            CornerRadius="4" Padding="8,3" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind TypeLabel}" FontSize="12" Foreground="Black" FontWeight="SemiBold" />
+                                    </Border>
+                                    <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Codec}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{x:Bind Detail}" FontSize="12" Opacity="0.7" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="3" Text="{x:Bind Language}" FontSize="12" Opacity="0.7" VerticalAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <TextBlock Text="尚未分析文件，请选择媒体文件后点击「查看媒体信息」"
+                               Opacity="0.6"
+                               Visibility="{x:Bind ViewModel.HasInfo, Mode=OneWay, Converter={StaticResource InvertBoolToVisibility}}" />
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>
