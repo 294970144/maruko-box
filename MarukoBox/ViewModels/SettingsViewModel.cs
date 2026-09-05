@@ -244,7 +244,8 @@ public partial class SettingsViewModel : ObservableObject
             var latest = await _update.GetLatestVersionAsync(channel);
             var local = _update.GetLocalVersion();
 
-            if (string.Equals(local, latest.Tag, StringComparison.OrdinalIgnoreCase))
+            // 版本级比较（容忍 v 前缀差异），而非字符串相等
+            if (!string.IsNullOrEmpty(local) && UpdateService.CompareVersions(local, latest.Tag) == 0)
             {
                 UpdateStatusMessage = $"已是最新版本（{local}）";
                 return;

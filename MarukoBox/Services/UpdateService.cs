@@ -90,7 +90,10 @@ public sealed partial class UpdateService : IUpdateService
 
         var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         using var doc = JsonDocument.Parse(json);
-        var tag = doc.RootElement.GetProperty("tag_name").GetString() ?? string.Empty;
+
+        // tag 形如 "v7.1.4-3"（带 v 前缀），规范化去掉以便与 VERSION 标记比较
+        var rawTag = doc.RootElement.GetProperty("tag_name").GetString() ?? string.Empty;
+        var tag = NormalizeTag(rawTag);
 
         string? url = null;
         if (doc.RootElement.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
@@ -98,7 +101,12 @@ public sealed partial class UpdateService : IUpdateService
             foreach (var asset in assets.EnumerateArray())
             {
                 var name = asset.TryGetProperty("name", out var n) ? n.GetString() : null;
-                if (name is not null && name.Contains("portable_win64.zip", StringComparison.OrdinalIgnoreCase))
+                // win64 便携版 zip。资产名随版本演进：
+                //   旧: jellyfin-ffmpeg_7.1.1-5-portable_win64.zip
+                //   新: jellyfin-ffmpeg_7.1.4-3_portable_win64-clang-gpl.zip
+                if (name is not null
+                    && name.Contains("portable_win64", StringComparison.OrdinalIgnoreCase)
+                    && name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 {
                     url = asset.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
                     break;
@@ -114,38 +122,88 @@ public sealed partial class UpdateService : IUpdateService
         return new RemoteFfmpegVersion(tag, url);
     }
 
-    // ---------- 国内镜像（兰州大学开源镜像站，HTML 目录索引） ----------
+    /// <summary>"v7.1.4-3" -> "7.1.4-3"（仅在 v/V 后紧跟数字时剥前缀）。</summary>
+    private static string NormalizeTag(string tag)
+    {
+        if (tag.Length > 1 && (tag[0] == 'v' || tag[0] == 'V') && char.IsDigit(tag[1]))
+        {
+            return tag[1..];
+        }
+        return tag;
+    }
 
-    [GeneratedRegex(@"jellyfin-ffmpeg_(\d+(?:\.\d+){1,2})-(\d+)-portable_win64\.zip",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex MirrorFileRegex();
+    // ---------- 国内镜像（兰州大学开源镜像站，Apache autoindex 目录） ----------
+
+    private const string MirrorBase = "https://mirror.lzu.edu.cn/jellyfin/ffmpeg/windows/";
+
+    // 目录为四层结构（实测 2026-09）：
+    //   windows/{大版本}.x/{tag}/win64/jellyfin-ffmpeg_{tag}[-_]portable_win64*.zip
+    //   例: windows/7.x/7.1.1-5/win64/jellyfin-ffmpeg_7.1.1-5-portable_win64.zip
+    private static readonly Regex MirrorMajorsRegex =
+        new(@"href=""(\d+)\.x/""", RegexOptions.Compiled);
+
+    private static readonly Regex MirrorTagsRegex =
+        new(@"href=""(\d+(?:\.\d+)+-\d+)/""", RegexOptions.Compiled);
 
     private async Task<RemoteFfmpegVersion> GetLatestFromMirrorAsync(CancellationToken ct)
     {
-        const string indexUrl = "https://mirror.lzu.edu.cn/jellyfin/ffmpeg/windows/";
-
-        using var request = new HttpRequestMessage(HttpMethod.Get, indexUrl);
-        request.Headers.UserAgent.ParseAdd("MarukoBox/1.0");
-
-        using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        var html = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-
-        // 目录索引里逐条匹配 jellyfin-ffmpeg_7.1.1-5-portable_win64.zip，取版本最高者
-        RemoteFfmpegVersion? best = null;
-        foreach (Match m in MirrorFileRegex().Matches(html))
+        // 1) 列大版本子目录（5.x/6.x/7.x/8.x...），取数字最大者——最高完整版本必然在其中
+        var rootHtml = await HttpGetStringAsync(MirrorBase, ct).ConfigureAwait(false);
+        var majors = MirrorMajorsRegex.Matches(rootHtml)
+            .Select(m => int.Parse(m.Groups[1].Value))
+            .Distinct()
+            .ToList();
+        if (majors.Count == 0)
         {
-            var tag = $"{m.Groups[1].Value}-{m.Groups[2].Value}";
-            var url = indexUrl + m.Value;
-            if (best is null || CompareVersions(tag, best.Tag) > 0)
+            throw new InvalidOperationException("镜像站目录结构已变化，未找到版本子目录");
+        }
+        var major = majors.Max();
+
+        // 2) 列该大版本下的全部 tag（如 8.1.2-3），取版本最高者
+        var majorHtml = await HttpGetStringAsync($"{MirrorBase}{major}.x/", ct).ConfigureAwait(false);
+        var tags = MirrorTagsRegex.Matches(majorHtml)
+            .Select(m => m.Groups[1].Value)
+            .Distinct()
+            .ToList();
+        if (tags.Count == 0)
+        {
+            throw new InvalidOperationException($"镜像站 {major}.x/ 下未找到任何版本目录");
+        }
+        var bestTag = tags[0];
+        foreach (var t in tags)
+        {
+            // CompareVersions: a 较新返回正数——t 更新时替换 bestTag
+            if (CompareVersions(t, bestTag) > 0)
             {
-                best = new RemoteFfmpegVersion(tag, url);
+                bestTag = t;
             }
         }
 
-        return best
-            ?? throw new InvalidOperationException("镜像站上未找到可用的 ffmpeg 版本（目录页可能暂时不可达）");
+        // 3) 该 tag 的 win64/ 下找 zip。命名两代并存：
+        //    旧: jellyfin-ffmpeg_{tag}-portable_win64.zip          （优先，体积小）
+        //    新: jellyfin-ffmpeg_{tag}_portable_win64-clang-gpl.zip
+        var win64Html = await HttpGetStringAsync($"{MirrorBase}{major}.x/{bestTag}/win64/", ct).ConfigureAwait(false);
+        var escapedTag = Regex.Escape(bestTag);
+        var zipMatch = Regex.Match(win64Html, $@"href=""(jellyfin-ffmpeg_{escapedTag}-portable_win64\.zip)""");
+        if (!zipMatch.Success)
+        {
+            zipMatch = Regex.Match(win64Html, $@"href=""(jellyfin-ffmpeg_{escapedTag}_portable_win64[^""]*\.zip)""");
+        }
+        if (!zipMatch.Success)
+        {
+            throw new InvalidOperationException($"镜像站 {bestTag} 下未找到 win64 便携版压缩包");
+        }
+
+        return new RemoteFfmpegVersion(bestTag, $"{MirrorBase}{major}.x/{bestTag}/win64/{zipMatch.Groups[1].Value}");
+    }
+
+    private async Task<string> HttpGetStringAsync(string url, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.UserAgent.ParseAdd("MarukoBox/1.0");
+        using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
     }
 
     // ---------- 版本比较 ----------
