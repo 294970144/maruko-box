@@ -51,7 +51,7 @@ maruko-box/
 
 ```powershell
 pwsh -File Installer-Inno\build-installer.ps1
-# 产物：dist\MarukoBoxSetup-Inno_1.0.0.exe
+# 产物：dist\MarukoBoxSetup-Inno_1.1.0.exe
 ```
 
 流程：`dotnet publish` 主程序（自包含 unpackaged） → 解压内置 ffmpeg 进 payload → `ISCC.exe` 编译 `.iss` 生成安装包（含中文向导、开始菜单快捷方式、卸载注册）。
@@ -67,7 +67,7 @@ pwsh -File Installer-Inno\build-installer.ps1 -KeepPayload
 ## 安装与卸载
 
 ```text
-MarukoBoxSetup-Inno_1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART   安装
+MarukoBoxSetup-Inno_1.1.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART   安装
 unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART                     卸载
 ```
 

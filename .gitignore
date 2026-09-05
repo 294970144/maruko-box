@@ -48,3 +48,6 @@ Desktop.ini
 #   *.cs  *.csproj  *.sln
 #   Installer-Inno/*.iss  *.ps1
 #   *.md  .gitignore
+
+# --- build temp logs (shell redirect artifacts) ---
+build_log.txt
