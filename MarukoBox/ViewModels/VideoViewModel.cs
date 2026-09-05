@@ -48,6 +48,27 @@ public partial class VideoViewModel : ObservableObject
         new() { Value = "custom", Name = "命令自定义（手动参数）" }
     };
 
+    /// <summary>
+    /// 「普通」级专属的恒定质量四档。值映射到 CRF（CPU）/ CQP（GPU），
+    /// 数值越低质量越高：低=30、中=26、高=22、非常高=18。
+    /// </summary>
+    public ObservableCollection<OptionEntry> QualityPresetOptions { get; } = new()
+    {
+        new() { Value = "low",      Name = "低（体积最小）" },
+        new() { Value = "medium",   Name = "中" },
+        new() { Value = "high",     Name = "高（推荐）" },
+        new() { Value = "veryhigh", Name = "非常高（体积最大）" }
+    };
+
+    /// <summary>质量档 → CRF/CQP 数值映射。</summary>
+    private static int QualityPresetToValue(string preset) => preset switch
+    {
+        "low" => 30,
+        "high" => 22,
+        "veryhigh" => 18,
+        _ => 26
+    };
+
     public ObservableCollection<OptionEntry> ContainerOptions { get; } = new()
     {
         new() { Value = "mp4", Name = "MP4" },
@@ -102,6 +123,10 @@ public partial class VideoViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string SelectedCpuMode { get; set; } = "crf";
+
+    /// <summary>「普通」级质量档（low/medium/high/veryhigh）；变更即写入 CRF 与 CQP 两条路径。</summary>
+    [ObservableProperty]
+    public partial string SelectedQualityPreset { get; set; } = "high";
 
     /// <summary>命令自定义模式的原始 ffmpeg 视频参数。</summary>
     [ObservableProperty]
@@ -205,7 +230,84 @@ public partial class VideoViewModel : ObservableObject
         // 全局默认输出目录作为「输出文件夹」的初始值；用户清空即回退到源文件同目录。
         OutputDir = config.OutputDirectory;
 
+        // 保持习惯：恢复上次会话的编码参数（覆盖上方默认值）
+        if (config.RememberLastSession)
+        {
+            RestoreSession(ConfigService.LoadSession());
+        }
+
         _ = DetectAsync();
+    }
+
+    /// <summary>把当前参数快照写入 session.json（由 MainWindow 关闭流程调用）。</summary>
+    public void SaveSession() => ConfigService.SaveSession(CaptureSession());
+
+    // ---------- 保持习惯：会话快照 ----------
+
+    /// <summary>把当前视频页全部参数捕获为可持久化快照。</summary>
+    public SessionState CaptureSession() => new()
+    {
+        Encoder = (SelectedEncoderOption?.Type ?? EncoderType.Auto).ToString(),
+        RateControl = SelectedRateControl,
+        CpuMode = SelectedCpuMode,
+        QualityPreset = SelectedQualityPreset,
+        Crf = Settings.Crf,
+        Quality = Settings.Quality,
+        BitrateKbps = Settings.BitrateKbps,
+        MaxBitrateKbps = Settings.MaxBitrateKbps,
+        BufferSizeKbps = Settings.BufferSizeKbps,
+        GpuPreset = Settings.GpuPreset,
+        GpuTune = SelectedGpuTune,
+        Profile = SelectedProfile,
+        CpuPreset = SelectedCpuPreset,
+        CustomArgs = CustomArgs,
+        KeepOriginalResolution = KeepOriginalResolution,
+        Width = Settings.Width,
+        Height = Settings.Height,
+        Container = SelectedContainer,
+        AudioMode = SelectedAudio,
+        SubtitleMode = SelectedSubtitle,
+        OutputDir = OutputDir,
+        AfterCompletion = SelectedAfter
+    };
+
+    /// <summary>恢复会话快照；null（无快照/解析失败）时保持默认值不动。</summary>
+    private void RestoreSession(SessionState? s)
+    {
+        if (s is null)
+        {
+            return;
+        }
+
+        if (Enum.TryParse<EncoderType>(s.Encoder, out var enc))
+        {
+            var opt = EncoderOptions.FirstOrDefault(o => o.Type == enc);
+            if (opt is not null)
+            {
+                SelectedEncoderOption = opt;
+            }
+        }
+        SelectedRateControl = s.RateControl;
+        SelectedCpuMode = s.CpuMode;
+        SelectedQualityPreset = s.QualityPreset;
+        Settings.Crf = s.Crf;
+        Settings.Quality = s.Quality;
+        Settings.BitrateKbps = s.BitrateKbps;
+        Settings.MaxBitrateKbps = s.MaxBitrateKbps;
+        Settings.BufferSizeKbps = s.BufferSizeKbps;
+        Settings.GpuPreset = s.GpuPreset;
+        SelectedGpuTune = s.GpuTune;
+        SelectedProfile = s.Profile;
+        SelectedCpuPreset = s.CpuPreset;
+        CustomArgs = s.CustomArgs;
+        KeepOriginalResolution = s.KeepOriginalResolution;
+        Settings.Width = s.Width;
+        Settings.Height = s.Height;
+        SelectedContainer = s.Container;
+        SelectedAudio = s.AudioMode;
+        SelectedSubtitle = s.SubtitleMode;
+        OutputDir = s.OutputDir;
+        SelectedAfter = s.AfterCompletion;
     }
 
     // ---------- 选择器变更：同步到 Settings 并刷新可见性 ----------
@@ -226,6 +328,13 @@ public partial class VideoViewModel : ObservableObject
     {
         Settings.CpuMode = value;
         RaiseVisibility();
+    }
+
+    partial void OnSelectedQualityPresetChanged(string value)
+    {
+        // 同时写 CRF（CPU 路径）与 CQP Quality（GPU 路径），编码器解析到哪条都用同一档
+        Settings.Crf = QualityPresetToValue(value);
+        Settings.Quality = QualityPresetToValue(value);
     }
 
     partial void OnGpuInfoChanged(GpuInfo value)

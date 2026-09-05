@@ -138,7 +138,7 @@ public sealed class MuxKindToBrush : IValueConverter
 /// 按用户级别控制控件可见性：当前级别 ≥ ConverterParameter 指定的最低级别时显示。
 /// value 绑定当前 <see cref="UserLevel"/>（枚举或字符串代码均可）；
 /// parameter 为所需最低级别（Default / Expert / Developer，大小写不敏感）。
-/// 例：ConverterParameter='Expert' 表示高手及以上可见，默认（小白）级别隐藏。
+/// 例：ConverterParameter='Expert' 表示高级及以上可见，普通（小白）级别隐藏。
 /// </summary>
 public sealed class UserLevelToVisibility : IValueConverter
 {
@@ -152,6 +152,28 @@ public sealed class UserLevelToVisibility : IValueConverter
         };
         var required = UserLevels.Parse(parameter as string);
         return current >= required ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
+/// 仅当用户级别「等于」ConverterParameter 指定级别时显示。
+/// 用于普通（小白）专属的简化控件：升级后隐藏，避免与完整参数面板重复。
+/// </summary>
+public sealed class UserLevelEqualsToVisibility : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var current = value switch
+        {
+            UserLevel level => level,
+            string s => UserLevels.Parse(s),
+            _ => UserLevel.Default
+        };
+        var required = UserLevels.Parse(parameter as string);
+        return current == required ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)

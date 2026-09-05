@@ -119,6 +119,10 @@ public partial class SettingsViewModel : ObservableObject
     private string _savedThemeBeforeSave = string.Empty;
     private string _savedUserLevelBeforeSave = string.Empty;
 
+    /// <summary>保持习惯：退出记住视频页参数、下次启动恢复（即时生效，无需重启）。</summary>
+    [ObservableProperty]
+    public partial bool RememberLastSession { get; set; } = true;
+
     public SettingsViewModel()
     {
         var config = _config.Load();
@@ -126,6 +130,7 @@ public partial class SettingsViewModel : ObservableObject
         OutputDirectory = config.OutputDirectory;
         Theme = CodeToThemeDisplay(config.Theme);
         GpuDevice = config.GpuDevice;
+        RememberLastSession = config.RememberLastSession;
         SelectedUserLevel = UserLevels.ToDisplay(UserLevels.Parse(config.UserLevel));
 
         // 记录"未保存前"的实际值，Save() 比对时使用——
@@ -249,7 +254,8 @@ public partial class SettingsViewModel : ObservableObject
             Theme = ThemeToCode(Theme),
             OutputDirectory = OutputDirectory,
             GpuDevice = GpuDevice,
-            UserLevel = UserLevels.DisplayToCode(SelectedUserLevel)
+            UserLevel = UserLevels.DisplayToCode(SelectedUserLevel),
+            RememberLastSession = RememberLastSession
         };
         _config.Save(config);
 

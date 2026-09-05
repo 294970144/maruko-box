@@ -204,6 +204,31 @@
                 </Grid>
             </Border>
 
+            <!-- 保持习惯（即时生效，无需重启） -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0" Glyph="&#xE81C;" FontSize="24"
+                              VerticalAlignment="Center" />
+
+                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="保持习惯" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="退出时记住视频页的编码设置，下次打开自动恢复，与上次完全一致；关闭后每次都用默认参数。即时生效"
+                                   Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ToggleSwitch Grid.Column="2" VerticalAlignment="Center"
+                                  IsOn="{x:Bind ViewModel.RememberLastSession, Mode=TwoWay}" />
+                </Grid>
+            </Border>
+
             <!-- 用户级别（切换后重启生效） -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"

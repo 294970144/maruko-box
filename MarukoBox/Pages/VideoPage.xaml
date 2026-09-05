@@ -14,6 +14,7 @@
         <conv:InvertBool x:Key="InvertBool" />
         <conv:InvertBoolToVisibility x:Key="InvertBoolToVisibility" />
         <conv:UserLevelToVisibility x:Key="UserLevelToVisibility" />
+        <conv:UserLevelEqualsToVisibility x:Key="UserLevelEqualsToVisibility" />
     </Page.Resources>
 
     <Grid ColumnSpacing="16" Padding="24">
@@ -84,6 +85,22 @@
                                   DisplayMemberPath="Name"
                                   SelectedItem="{x:Bind ViewModel.SelectedEncoderOption, Mode=TwoWay}"
                                   HorizontalAlignment="Stretch" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 质量（普通级专属：恒定质量四档，升级后由完整码率控制取代） -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16"
+                        Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelEqualsToVisibility}, ConverterParameter='Default'}">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="质量" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <ComboBox ItemsSource="{x:Bind ViewModel.QualityPresetOptions, Mode=OneWay}"
+                                  DisplayMemberPath="Name" SelectedValuePath="Value"
+                                  SelectedValue="{x:Bind ViewModel.SelectedQualityPreset, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Text="恒定质量编码：文件大小由画面复杂度决定，质量越高越清晰、体积越大"
+                                   FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
 
@@ -219,7 +236,6 @@
                         BorderThickness="1" CornerRadius="8" Padding="16">
                     <StackPanel Spacing="12">
                         <TextBlock Text="分辨率与输出" Style="{StaticResource BodyStrongTextBlockStyle}" />
-
                         <ToggleSwitch Header="保持原始分辨率" IsOn="{x:Bind ViewModel.KeepOriginalResolution, Mode=TwoWay}" />
 
                         <Grid ColumnSpacing="8" Visibility="{x:Bind ViewModel.KeepOriginalResolution, Mode=OneWay, Converter={StaticResource InvertBoolToVisibility}}">
@@ -259,31 +275,31 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
-
-                <!-- 输出文件夹 -->
-                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1" CornerRadius="8" Padding="16">
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="输出文件夹" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <Grid ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Text="{x:Bind ViewModel.OutputDir, Mode=TwoWay}"
-                                     PlaceholderText="留空则输出到源文件同目录" />
-                            <Button Grid.Column="1" Content="浏览"
-                                    Command="{x:Bind ViewModel.BrowseOutputCommand, Mode=OneWay}" />
-                        </Grid>
-                    </StackPanel>
-                </Border>
             </StackPanel>
         </ScrollViewer>
 
         <!-- ============ 右：输出与进度 ============ -->
         <StackPanel Grid.Column="2" Spacing="12">
             <TextBlock Text="输出与进度" Style="{StaticResource TitleTextBlockStyle}" />
+
+            <!-- 输出文件夹 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="输出文件夹" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Text="{x:Bind ViewModel.OutputDir, Mode=TwoWay}"
+                                 PlaceholderText="留空则输出到源文件同目录" />
+                        <Button Grid.Column="1" Content="浏览"
+                                Command="{x:Bind ViewModel.BrowseOutputCommand, Mode=OneWay}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
 
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"

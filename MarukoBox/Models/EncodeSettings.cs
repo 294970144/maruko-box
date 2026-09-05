@@ -116,7 +116,7 @@ public class EncodeSettings
     public int Height { get; set; } = 540;
 
     /// <summary>是否保持原始分辨率（忽略 Width/Height）。</summary>
-    public bool KeepOriginalResolution { get; set; }
+    public bool KeepOriginalResolution { get; set; } = true;
 
     /// <summary>视频滤镜：none / scale_lanczos / sharpen / denoise。</summary>
     public string VideoFilter { get; set; } = "none";

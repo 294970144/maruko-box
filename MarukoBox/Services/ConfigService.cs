@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MarukoBox.Models;
 
 namespace MarukoBox.Services;
 
@@ -102,9 +103,15 @@ public class AppConfig
     /// <summary>多 GPU 时使用的设备序号（0 = 自动/第一张）。</summary>
     public int GpuDevice { get; set; }
 
-    /// <summary>用户级别：default（默认/小白）/ expert（高手）/ developer（程序员）。
+    /// <summary>用户级别：default（普通/默认/小白）/ expert（高级/高手）/ developer（专家/程序员）。
     /// 控制各页面控件显示的详细程度，切换后重启生效。</summary>
     public string UserLevel { get; set; } = "default";
+
+    /// <summary>
+    /// 保持习惯：退出时记住视频页编码参数，下次启动自动恢复（session.json）。
+    /// 关闭时每次启动都用默认参数。
+    /// </summary>
+    public bool RememberLastSession { get; set; } = true;
 }
 
 /// <inheritdoc cref="IConfigService"/>
@@ -190,6 +197,43 @@ public sealed class ConfigService : IConfigService
         catch
         {
             // 写入失败（如权限问题）时静默忽略，不影响主流程。
+        }
+    }
+
+    // ---------- 会话持久化（保持习惯） ----------
+
+    private static readonly string SessionPath = Path.Combine(ConfigDirectory, "session.json");
+
+    /// <summary>加载上次会话快照；文件不存在或解析失败返回 null（调用方用默认值）。</summary>
+    public static SessionState? LoadSession()
+    {
+        try
+        {
+            if (!File.Exists(SessionPath))
+            {
+                return null;
+            }
+            var json = File.ReadAllText(SessionPath);
+            return JsonSerializer.Deserialize<SessionState>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>保存会话快照；失败静默忽略（不影响退出流程）。</summary>
+    public static void SaveSession(SessionState state)
+    {
+        try
+        {
+            Directory.CreateDirectory(ConfigDirectory);
+            var json = JsonSerializer.Serialize(state, JsonOptions);
+            File.WriteAllText(SessionPath, json);
+        }
+        catch
+        {
+            // 静默忽略
         }
     }
 

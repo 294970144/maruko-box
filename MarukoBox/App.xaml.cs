@@ -178,6 +178,11 @@ public partial class App : Application
     {
         Window = new MainWindow();
         DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+
+        // 保持习惯：窗口关闭（含重启流程的 Exit）时保存视频页会话快照。
+        // 开关由 MainWindow 内部判断——关闭时跳过保存即可。
+        Window.Closed += (_, _) => MainWindow.SaveSessionIfEnabled();
+
         Window.Activate();
     }
 }

@@ -1,8 +1,15 @@
-# 小丸工具箱 (MarukoBox)
+# <img src="docs/icon.png" width="40" align="top"> 小丸工具箱 (MarukoBox)
 
 > 本项目是基于经典 [**小丸工具箱**](https://maruko.appinn.me/) 的理念重做现代化版本：保留「简单易用的压制工具箱」这一核心体验，用 WinUI 3 全面重构，并加入 GPU 硬件加速与内置 ffmpeg。
 
 基于 [**ffmpeg**](https://ffmpeg.org/) 的 Windows 桌面多媒体处理工具箱，使用 **WinUI 3** + **.NET 10** 构建，走 **unpackaged（免 MSIX / 免商店）** 部署路线，安装无需管理员权限、无需代码签名。
+
+## 界面预览
+
+| 浅色 | 深色 |
+|---|---|
+| ![视频页（浅色）](docs/screenshots/video-light.png) | ![视频页（深色）](docs/screenshots/video-dark.png) |
+| ![设置页（浅色）](docs/screenshots/settings-light.png) | ![设置页（深色）](docs/screenshots/settings-dark.png) |
 
 ## 功能
 
@@ -12,9 +19,10 @@
 - **字幕**：提取、嵌入、字幕格式转换
 - **封装 (Mux)**：音视频流重新封装
 - **内置 ffmpeg**：安装包捆绑 [jellyfin-ffmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) 便携版，开箱即用，无需自行下载
-- **检查更新 / 检查依赖**：软件自身从 GitHub 一键升级；「检查依赖」体检内置 ffmpeg 及其它依赖，并可从 GitHub 升级内置 ffmpeg（8.x 起带 NVENC API 13.1 门槛，驱动过旧时自动拦截）
+- **检查更新 / 检查依赖**：软件自身从 GitHub 一键升级；「检查依赖」体检内置 ffmpeg 及其它依赖，并可从 GitHub 升级内置 ffmpeg（8.x 起带 NVENC API 13.1 门槛，驱动过旧时自动拦截；「专家」级可从版本列表强制安装任意版本）
 - **主题设置**：跟随系统 / 浅色模式 / 深色模式
-- **用户分级**：默认（小白）/ 高手 / 程序员三档，按级别显示不同复杂度的选项
+- **保持习惯**：退出时记住编码设置，下次打开自动恢复
+- **用户分级**：普通 / 高级 / 专家三档，按级别显示不同复杂度的选项（普通级为「低/中/高/非常高」恒定质量四档，进阶级解锁码率/Preset 等完整参数）
 
 ## 技术栈
 
