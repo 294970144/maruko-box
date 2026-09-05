@@ -1,4 +1,4 @@
-# 用 PowerShell 7 编译 Inno Setup 安装包（编码稳健版）
+﻿# 用 PowerShell 7 编译 Inno Setup 安装包（编码稳健版）
 #
 # 用法（PowerShell 7）：
 #   pwsh -File build.ps1

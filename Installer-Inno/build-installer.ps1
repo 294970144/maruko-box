@@ -1,4 +1,4 @@
-# 一键构建安装包：dotnet publish(unpackaged) -> iscc 编译 -> 输出到 dist
+﻿# 一键构建安装包：dotnet publish(unpackaged) -> iscc 编译 -> 输出到 dist
 #
 # 用法（PowerShell 7）：
 #   pwsh -File build-installer.ps1                 # 默认 payload 落到 $env:TEMP，构建完自动清理

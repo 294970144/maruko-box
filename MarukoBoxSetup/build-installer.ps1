@@ -1,4 +1,4 @@
-# 一键构建 AOT 自解压安装包：publish 主程序 -> 压 zip -> publish AOT stub -> 追加 payload -> dist
+﻿# 一键构建 AOT 自解压安装包：publish 主程序 -> 压 zip -> publish AOT stub -> 追加 payload -> dist
 #
 # 用法（PowerShell 7）：
 #   pwsh -File build-installer.ps1                 # 中间产物落 %TEMP%，成功后自动清理
