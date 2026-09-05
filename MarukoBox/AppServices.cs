@@ -17,4 +17,7 @@ public static class AppServices
 
     /// <summary>配置持久化。</summary>
     public static IConfigService Config { get; } = new ConfigService();
+
+    /// <summary>内置 ffmpeg 的检查与更新。</summary>
+    public static IUpdateService Update { get; } = new UpdateService();
 }

@@ -15,10 +15,15 @@
   <ItemGroup>
     <Compile Include="..\MarukoBox\Services\FfmpegService.cs" />
     <Compile Include="..\MarukoBox\Services\GpuDetectionService.cs" />
+    <Compile Include="..\MarukoBox\Services\ConfigService.cs" />
     <Compile Include="..\MarukoBox\Models\EncoderType.cs" />
     <Compile Include="..\MarukoBox\Models\GpuInfo.cs" />
     <Compile Include="..\MarukoBox\Models\EncodeSettings.cs" />
     <Compile Include="..\MarukoBox\Models\EncodeProgress.cs" />
     <Compile Include="..\MarukoBox\Models\EncodeItem.cs" />
+    <Compile Include="..\MarukoBox\Models\MediaFileInfo.cs" />
+    <Compile Include="..\MarukoBox\Models\MediaStreamInfo.cs" />
+    <Compile Include="..\MarukoBox\Models\AudioPreset.cs" />
+    <Compile Include="..\MarukoBox\Models\FrameExtractOptions.cs" />
   </ItemGroup>
 </Project>

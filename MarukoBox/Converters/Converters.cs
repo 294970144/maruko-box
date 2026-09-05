@@ -69,6 +69,19 @@ public sealed class InvertBoolToVisibility : IValueConverter
 }
 
 /// <summary>
+/// 将字符串映射为可见性（空/null→Collapsed，非空→Visible）。
+/// 用于「有状态消息时才显示」的场景。
+/// </summary>
+public sealed class EmptyToCollapsed : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+        => string.IsNullOrEmpty(value as string) ? Visibility.Collapsed : Visibility.Visible;
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
 /// 将媒体流类型映射为色标画刷（视频=绿 / 音频=蓝 / 字幕=橙 / 其它=灰）。
 /// 用于「抽取」页轨道列表的类型标签。
 /// </summary>

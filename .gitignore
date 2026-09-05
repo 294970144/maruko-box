@@ -14,6 +14,10 @@ dist/
 payload/
 artifacts/
 
+# --- 内置 ffmpeg 二进制源（jellyfin-ffmpeg 便携版 zip，92MB 级，不入库）---
+# 构建安装包时由 build-installer.ps1 自动发现并解压进 payload\ffmpeg\
+third_party/
+
 # --- Visual Studio / Rider / IDE ---
 .vs/
 .idea/

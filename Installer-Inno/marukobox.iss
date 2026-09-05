@@ -58,16 +58,4 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
-
-; [Code] 段保持纯英文：本机 Inno 6.7.3 的 Pascal 解析器对中文注释会报 BEGIN expected
-[Code]
-function FFmpegAvailable(): Boolean;
-begin
-  Result := FileSearch('ffmpeg.exe', GetEnv('PATH')) <> '';
-end;
-
-procedure CurStepChanged(CurStep: TSetupStep);
-begin
-  if (CurStep = ssPostInstall) and (not FFmpegAvailable) then
-    MsgBox('ffmpeg not found. Video features need ffmpeg; set its path later in Settings.', mbInformation, MB_OK);
-end;
+;

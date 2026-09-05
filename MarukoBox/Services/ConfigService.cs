@@ -21,7 +21,7 @@ public interface IConfigService
 /// </summary>
 public class AppConfig
 {
-    /// <summary>ffmpeg.exe 路径。为空时由 <see cref="ResolveFfmpegPath"/> 探测。</summary>
+    /// <summary>ffmpeg.exe 路径。为空时由 <see cref="ConfigService.ResolveFfmpegPath"/> 探测。</summary>
     public string FfmpegPath { get; set; } = string.Empty;
 
     /// <summary>默认视频编码器：Auto / NvencHevc / NvencH264 / AmfHevc / QsvHevc / X264 / X265。</summary>
@@ -38,6 +38,9 @@ public class AppConfig
 
     /// <summary>多 GPU 时使用的设备序号（0 = 自动/第一张）。</summary>
     public int GpuDevice { get; set; }
+
+    /// <summary>内置 ffmpeg 的更新渠道：mirror（国内镜像）/ github。</summary>
+    public string UpdateChannel { get; set; } = "mirror";
 }
 
 /// <inheritdoc cref="IConfigService"/>
@@ -54,25 +57,60 @@ public sealed class ConfigService : IConfigService
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
+    /// <summary>内置 ffmpeg.exe 的期望路径：安装目录下的 ffmpeg\ffmpeg.exe。</summary>
+    /// <remarks>
+    /// 由安装包构建脚本（build-installer.ps1）捆绑，或由「检查更新」功能下载落盘。
+    /// </remarks>
+    public static string BundledFfmpegPath =>
+        Path.Combine(AppContext.BaseDirectory, "ffmpeg", "ffmpeg.exe");
+
+    /// <summary>内置 ffprobe.exe 的期望路径。</summary>
+    public static string BundledFfprobePath =>
+        Path.Combine(AppContext.BaseDirectory, "ffmpeg", "ffprobe.exe");
+
+    /// <summary>内置 ffmpeg 是否可用。</summary>
+    public static bool HasBundledFfmpeg => File.Exists(BundledFfmpegPath);
+
+    /// <summary>内置 ffmpeg 的版本标记（构建/更新时写入 ffmpeg\VERSION；无内置返回空字符串）。</summary>
+    public static string GetBundledVersion()
+    {
+        try
+        {
+            var marker = Path.Combine(AppContext.BaseDirectory, "ffmpeg", "VERSION");
+            return File.Exists(marker) ? File.ReadAllText(marker).Trim() : string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
     /// <inheritdoc/>
     public AppConfig Load()
     {
+        AppConfig config;
         try
         {
             if (!File.Exists(ConfigPath))
             {
-                return CreateDefault();
+                config = CreateDefault();
             }
-
-            var json = File.ReadAllText(ConfigPath);
-            var config = JsonSerializer.Deserialize<AppConfig>(json);
-            return config ?? CreateDefault();
+            else
+            {
+                var json = File.ReadAllText(ConfigPath);
+                config = JsonSerializer.Deserialize<AppConfig>(json) ?? CreateDefault();
+            }
         }
         catch
         {
             // 配置损坏时回退到默认，避免应用崩溃。
-            return CreateDefault();
+            config = CreateDefault();
         }
+
+        // 自动纠偏：内置优先。配置路径失效、指向旧开发路径或内置可用时，
+        // 统一重解析出实际生效路径，全应用所有页面无需各自判断。
+        config.FfmpegPath = ResolveFfmpegPath(config.FfmpegPath);
+        return config;
     }
 
     /// <inheritdoc/>
@@ -99,20 +137,36 @@ public sealed class ConfigService : IConfigService
         };
     }
 
+    /// <summary>探测 ffmpeg.exe 的默认位置：内置优先，其次 PATH。</summary>
+    public static string ResolveFfmpegPath() => ResolveFfmpegPath(null);
+
     /// <summary>
-    /// 探测 ffmpeg.exe 的默认位置。
-    /// 优先使用已知工作路径，其次在 PATH 中查找。
+    /// 解析实际生效的 ffmpeg.exe 路径，优先级：
+    /// ① 安装目录内置的 ffmpeg\ffmpeg.exe（开箱即用，随「检查更新」升级）
+    /// ② 显式配置且文件存在（用户自定义路径）
+    /// ③ PATH 环境变量查找。
     /// </summary>
-    public static string ResolveFfmpegPath()
+    /// <param name="configuredPath">用户配置的路径；null 或空表示未配置。</param>
+    public static string ResolveFfmpegPath(string? configuredPath)
     {
-        // 1) 已知可用路径（本机已验证的 ffmpeg 8.1.2 + 驱动 610.62）
-        var known = @"E:\Git\WorkBuddy\日常\gpu-encode\ffmpeg.exe";
-        if (File.Exists(known))
+        // 1) 内置：安装目录下的 ffmpeg\ffmpeg.exe
+        var bundled = BundledFfmpegPath;
+        if (File.Exists(bundled))
         {
-            return known;
+            return bundled;
         }
 
-        // 2) 在 PATH 中查找
+        // 2) 显式配置且文件存在
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+        {
+            var trimmed = configuredPath.Trim();
+            if (File.Exists(trimmed))
+            {
+                return trimmed;
+            }
+        }
+
+        // 3) 在 PATH 中查找
         try
         {
             var psi = new System.Diagnostics.ProcessStartInfo

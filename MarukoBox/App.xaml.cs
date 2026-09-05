@@ -119,6 +119,11 @@ public partial class App : Application
     {
         InitializeComponent();
 
+        // ---------- 主题（必须在任何窗口内容加载前设置） ----------
+        // "System"（跟随系统）不设置，让框架跟随 Windows 主题；
+        // Light / Dark 显式设置 RequestedTheme。改动后需重启应用生效。
+        ApplyThemeFromConfig();
+
         // ---------- 全局异常兜底（微软规范：运行中的应用是事实来源） ----------
         // UI 线程未捕获异常：标记 Handled=true 防止进程退出（闪退）。
         UnhandledException += OnUnhandledException;
@@ -138,6 +143,31 @@ public partial class App : Application
     {
         LogCrash(e.Exception, "Application.UnhandledException");
         e.Handled = true; // 关键：阻止 UI 线程异常导致闪退
+    }
+
+    /// <summary>
+    /// 从配置读取主题并在 App 构造阶段应用。
+    /// WinUI 3 的 <see cref="Application.RequestedTheme"/> 只能在窗口内容加载前设置，
+    /// 运行中切换需要重启应用才能生效。
+    /// </summary>
+    private void ApplyThemeFromConfig()
+    {
+        try
+        {
+            var theme = AppServices.Config.Load().Theme;
+            if (string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase))
+            {
+                RequestedTheme = ApplicationTheme.Light;
+            }
+            else if (string.Equals(theme, "Dark", StringComparison.OrdinalIgnoreCase))
+            {
+                RequestedTheme = ApplicationTheme.Dark;
+            }
+        }
+        catch
+        {
+            // 主题读取失败不致命：回落到跟随系统
+        }
     }
 
     /// <summary>

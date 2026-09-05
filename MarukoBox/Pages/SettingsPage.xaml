@@ -14,12 +14,86 @@
         <conv:BoolToGlyph x:Key="BoolToGlyph" />
         <conv:BoolToVisibility x:Key="BoolToVisibility" />
         <conv:InvertBool x:Key="InvertBool" />
+        <conv:EmptyToCollapsed x:Key="EmptyToCollapsed" />
     </Page.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="16" Padding="32" MaxWidth="760">
 
             <TextBlock Text="设置" Style="{StaticResource TitleTextBlockStyle}" />
+
+            <!-- 检查更新 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <FontIcon Grid.Column="0" Glyph="&#xE777;" FontSize="24"
+                                  VerticalAlignment="Center" />
+
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="检查更新" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="{x:Bind ViewModel.LocalVersionText, Mode=OneWay}"
+                                       Opacity="0.7" FontSize="12"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                                    VerticalAlignment="Center">
+                            <Button Content="检查更新" Style="{StaticResource AccentButtonStyle}"
+                                    Command="{x:Bind ViewModel.CheckUpdateCommand, Mode=OneWay}"
+                                    IsEnabled="{x:Bind ViewModel.IsCheckingUpdate, Mode=OneWay, Converter={StaticResource InvertBool}}" />
+                            <Button Content="检查依赖"
+                                    Command="{x:Bind ViewModel.CheckDependenciesCommand, Mode=OneWay}"
+                                    IsEnabled="{x:Bind ViewModel.IsCheckingUpdate, Mode=OneWay, Converter={StaticResource InvertBool}}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- 下载进度（仅下载阶段可见） -->
+                    <ProgressBar Value="{x:Bind ViewModel.UpdateProgressPercent, Mode=OneWay}"
+                                 Maximum="100"
+                                 IsIndeterminate="{x:Bind ViewModel.IsDownloading, Mode=OneWay}"
+                                 Visibility="{x:Bind ViewModel.IsDownloading, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+
+                    <TextBlock Text="{x:Bind ViewModel.UpdateStatusMessage, Mode=OneWay}"
+                               Opacity="0.8" FontSize="12"
+                               IsTextSelectionEnabled="True"
+                               TextWrapping="Wrap"
+                               Visibility="{x:Bind ViewModel.UpdateStatusMessage, Mode=OneWay, Converter={StaticResource EmptyToCollapsed}}" />
+                </StackPanel>
+            </Border>
+
+            <!-- 更新渠道 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0" Glyph="&#xE774;" FontSize="24"
+                              VerticalAlignment="Center" />
+
+                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="更新渠道" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="内置 ffmpeg 的下载来源（保存配置后生效）"
+                                   Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ComboBox Grid.Column="2" MinWidth="150" VerticalAlignment="Center"
+                              ItemsSource="{x:Bind ViewModel.UpdateChannelOptions, Mode=OneWay}"
+                              SelectedItem="{x:Bind ViewModel.SelectedUpdateChannel, Mode=TwoWay}" />
+                </Grid>
+            </Border>
 
             <!-- 硬件检测状态条 -->
             <InfoBar
@@ -93,7 +167,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBox Grid.Column="0" Text="{x:Bind ViewModel.FfmpegPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 PlaceholderText="选择 ffmpeg.exe 位置" />
+                                 PlaceholderText="留空 = 自动使用内置 ffmpeg" />
                         <Button Grid.Column="1" Content="浏览…" Command="{x:Bind ViewModel.BrowseFfmpegCommand, Mode=OneWay}" />
                     </Grid>
                 </StackPanel>
@@ -123,19 +197,38 @@
                 </StackPanel>
             </Border>
 
+            <!-- 主题（切换后重启生效） -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0" Glyph="&#xE790;" FontSize="24"
+                              VerticalAlignment="Center" />
+
+                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="主题" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="切换后需重启应用生效"
+                                   Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ComboBox Grid.Column="2" MinWidth="150" VerticalAlignment="Center"
+                              ItemsSource="{x:Bind ViewModel.ThemeOptions, Mode=OneWay}"
+                              SelectedItem="{x:Bind ViewModel.Theme, Mode=TwoWay}" />
+                </Grid>
+            </Border>
+
             <!-- 界面与行为 -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1" CornerRadius="8" Padding="16">
                 <StackPanel Spacing="12">
                     <TextBlock Text="界面与行为" Style="{StaticResource BodyStrongTextBlockStyle}" />
-
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="主题" Opacity="0.8" />
-                        <ComboBox ItemsSource="{x:Bind ViewModel.ThemeOptions, Mode=OneWay}"
-                                  SelectedItem="{x:Bind ViewModel.Theme, Mode=TwoWay}"
-                                  Width="200" HorizontalAlignment="Left" />
-                    </StackPanel>
 
                     <StackPanel Spacing="6">
                         <TextBlock Text="编码完成后" Opacity="0.8" />

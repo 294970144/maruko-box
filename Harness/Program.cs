@@ -2,7 +2,16 @@ using MarukoBox.Services;
 using MarukoBox.Models;
 using System.Diagnostics;
 
-var ffmpeg = @"E:\Git\WorkBuddy\日常\gpu-encode\ffmpeg.exe";
+// 与主程序一致的路径解析链：内置 ffmpeg 优先，其次 PATH
+var ffmpeg = ConfigService.ResolveFfmpegPath();
+if (string.IsNullOrEmpty(ffmpeg))
+{
+    Console.WriteLine("未找到 ffmpeg（无内置、PATH 中也没有）。请放置内置 ffmpeg 或将其加入 PATH。");
+    Environment.Exit(1);
+}
+Console.WriteLine($"ffmpeg: {ffmpeg}");
+Console.WriteLine($"内置版本标记: {ConfigService.GetBundledVersion()}");
+
 var src = @"C:\Users\zhang\fftest\src.mp4";
 var outp = @"C:\Users\zhang\fftest\out.mp4";
 Directory.CreateDirectory(Path.GetDirectoryName(src)!);
