@@ -8,10 +8,30 @@ namespace MarukoBox.Services;
 /// <summary>软件自身（MarukoBox）在 GitHub 上的最新 Release 信息。</summary>
 public record AppReleaseInfo(string Tag, string Version, string DownloadUrl);
 
-/// <summary>从远端发现的内置 ffmpeg 新版信息。</summary>
-public record RemoteFfmpegVersion(string Tag, string DownloadUrl);
+/// <summary>
+/// 从远端 jellyfin-ffmpeg release 拉到的完整信息（含资产、时间、是否 prerelease）。
+/// 用于「程序员」专列版本列表展示与按驱动兼容性过滤。
+/// </summary>
+public sealed record RemoteFfmpegRelease(
+    string Tag,
+    string AssetUrl,
+    DateTimeOffset PublishedAt,
+    long AssetSizeBytes,
+    bool IsPrerelease);
 
-/// <summary>内置 ffmpeg 更新推送的判定结果（NVENC API 门槛）。</summary>
+/// <summary>
+/// 按本机驱动兼容性筛选取的 ffmpeg 推荐升级目标。
+/// 「驱动门槛」按 jellyfin-ffmpeg 8.x NVENC API 13.1 (驱动 ≥610) 的规则过滤；
+/// 在剩余版本中取最高者；若全被拦截则 <see cref="Recommended"/> 为 false，
+/// <see cref="BlockReason"/> 给出拦截原因（一般是「N 卡驱动过旧」）。
+/// </summary>
+public sealed record FfmpegRecommendation(
+    bool Recommended,
+    string? RecommendedTag = null,
+    string? RecommendedDownloadUrl = null,
+    string? BlockReason = null);
+
+/// <summary>单条版本是否应被允许推送（NVENC API 门槛）。</summary>
 public sealed record FfmpegUpdateOffer(bool Offer, string? BlockReason = null);
 
 /// <summary>
@@ -21,20 +41,34 @@ public sealed record FfmpegUpdateOffer(bool Offer, string? BlockReason = null);
 /// </summary>
 public interface IUpdateService
 {
-    /// <summary>当前软件版本（程序集版本，如 "1.2.0"）。</summary>
+    /// <summary>当前软件版本（程序集版本，如 "1.3.0"）。</summary>
     string GetAppVersion();
 
     /// <summary>当前内置 ffmpeg 的版本（读取 ffmpeg\VERSION 标记；未内置返回空字符串）。</summary>
     string GetLocalVersion();
 
-    /// <summary>从 GitHub 查询 jellyfin-ffmpeg 最新 win64 便携版；查询失败抛出异常。</summary>
-    Task<RemoteFfmpegVersion> GetLatestFfmpegAsync(CancellationToken ct = default);
+    /// <summary>
+    /// 从 GitHub 拉取 jellyfin-ffmpeg 全部 release（跳过 draft）的完整信息。
+    /// 含 published_at、资产大小、是否 prerelease；供「程序员」专列版本列表与
+    /// <see cref="GetRecommendedFfmpegAsync"/> 复用，避免重复请求。
+    /// </summary>
+    Task<IReadOnlyList<RemoteFfmpegRelease>> GetAllFfmpegReleasesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// 按本机 GPU 驱动兼容性过滤，并在剩余版本中取最高者作为 ffmpeg 升级推荐。
+    /// 若所有候选都因驱动门槛被拒，则返回 <see cref="FfmpegRecommendation.Recommended"/>=false
+    /// 并在 <see cref="FfmpegRecommendation.BlockReason"/> 给出首个拦截原因。
+    /// </summary>
+    Task<FfmpegRecommendation> GetRecommendedFfmpegAsync(GpuInfo gpu, CancellationToken ct = default);
+
+    /// <summary>
+    /// 判定单条目标版本是否应被允许推送（NVENC API 门槛）。
+    /// 程序员专列的版本列表里也用此方法给「兼容性」做软标注。
+    /// </summary>
+    FfmpegUpdateOffer ShouldOfferFfmpegUpdate(GpuInfo gpu, string targetTag);
 
     /// <summary>从 GitHub 查询 MarukoBox 自身最新 Release；查询失败抛出异常。</summary>
     Task<AppReleaseInfo> GetLatestAppReleaseAsync(CancellationToken ct = default);
-
-    /// <summary>判定是否应向用户推送某个内置 ffmpeg 新版（NVENC API 门槛）。</summary>
-    FfmpegUpdateOffer ShouldOfferFfmpegUpdate(GpuInfo gpu, string targetTag);
 
     /// <summary>下载并安装新版 ffmpeg 到应用目录的 ffmpeg\ 下（整目录替换，写入 VERSION 标记）。</summary>
     Task DownloadAndInstallAsync(string downloadUrl, string versionTag,
@@ -72,13 +106,49 @@ public sealed partial class UpdateService : IUpdateService
     public string GetLocalVersion() => ConfigService.GetBundledVersion();
 
     /// <inheritdoc/>
-    public async Task<RemoteFfmpegVersion> GetLatestFfmpegAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<RemoteFfmpegRelease>> GetAllFfmpegReleasesAsync(CancellationToken ct = default)
+        => await FetchAllReleasesAsync(ct).ConfigureAwait(false);
+
+    /// <inheritdoc/>
+    public async Task<FfmpegRecommendation> GetRecommendedFfmpegAsync(GpuInfo gpu, CancellationToken ct = default)
+    {
+        var all = await FetchAllReleasesAsync(ct).ConfigureAwait(false);
+
+        // 在通过兼容性门槛的版本中取最高；记录首个拦截原因以便汇总给用户。
+        RemoteFfmpegRelease? best = null;
+        string? firstBlock = null;
+        foreach (var r in all)
+        {
+            var offer = ShouldOfferFfmpegUpdateStatic(gpu, r.Tag);
+            if (!offer.Offer)
+            {
+                firstBlock ??= offer.BlockReason;
+                continue;
+            }
+            if (best is null || CompareVersions(r.Tag, best.Tag) > 0)
+            {
+                best = r;
+            }
+        }
+
+        return best is null
+            ? new FfmpegRecommendation(false, BlockReason: firstBlock ?? "无可用的 ffmpeg 版本")
+            : new FfmpegRecommendation(true, best.Tag, best.AssetUrl);
+    }
+
+    /// <summary>
+    /// 拉取 jellyfin-ffmpeg 的全部 release（跳过 draft），序列化为
+    /// <see cref="RemoteFfmpegRelease"/> 列表。
+    /// 优先级：8.x 与 7.x 均入选（含 prerelease），这是为了确保 NVENC API 13.1
+    /// 门槛与「程序员」专列版本列表都能看到完整候选。
+    /// </summary>
+    private async Task<List<RemoteFfmpegRelease>> FetchAllReleasesAsync(CancellationToken ct)
     {
         // jellyfin-ffmpeg 的 8.x 系列在 GitHub 上标为 prerelease（7.x 已停止更新，
         // 稳定版止于 7.1.4-3）。/releases/latest 只返回稳定版，会漏掉 8.x——
         // 而 8.x 恰恰是需要 NVENC API 13.1 门槛、且被此前镜像渠道选中的版本。
-        // 因此这里拉取全部 release（跳过 draft），按版本号选最高者，保证与
-        // 「内置 ffmpeg 更新」语义一致：始终能发现 8.x 并正确应用 NVENC 门槛。
+        // 因此这里拉取全部 release（跳过 draft），保证 NVENC 门槛与
+        // 「内置 ffmpeg 更新」语义一致：始终能发现 8.x 并正确应用门槛。
         using var doc = await GetReleaseJsonAsync(
             "https://api.github.com/repos/jellyfin/jellyfin-ffmpeg/releases?per_page=30", ct)
             .ConfigureAwait(false);
@@ -88,7 +158,7 @@ public sealed partial class UpdateService : IUpdateService
             throw new InvalidOperationException("GitHub 返回的 ffmpeg Release 列表格式异常");
         }
 
-        RemoteFfmpegVersion? best = null;
+        var result = new List<RemoteFfmpegRelease>();
         foreach (var release in doc.RootElement.EnumerateArray())
         {
             if (release.TryGetProperty("draft", out var draft) && draft.GetBoolean())
@@ -98,39 +168,41 @@ public sealed partial class UpdateService : IUpdateService
 
             var rawTag = release.TryGetProperty("tag_name", out var tn) ? tn.GetString() : null;
             var tag = NormalizeTag(rawTag ?? string.Empty);
-            var url = FindPortableZipUrl(release);
+            var publishedAt = ParsePublishedAt(release);
+            var isPrerelease = release.TryGetProperty("prerelease", out var pre) && pre.GetBoolean();
+            var (url, size) = FindPortableZipUrlWithSize(release);
 
             if (string.IsNullOrEmpty(tag) || url is null)
             {
                 continue;
             }
 
-            // CompareVersions(a, b) > 0 表示 a 较新；此处 tag 较 best 新则替换。
-            // 注意：返回值语义是「b 较新返回负数」，切不可写成 < 0，否则会选到最旧版本。
-            if (best is null || CompareVersions(tag, best.Tag) > 0)
-            {
-                best = new RemoteFfmpegVersion(tag, url);
-            }
+            result.Add(new RemoteFfmpegRelease(tag, url, publishedAt, size, isPrerelease));
         }
+        return result;
+    }
 
-        if (best is null)
+    /// <summary>解析 release 的 published_at 字段；缺失或解析失败回退 UnixEpoch。</summary>
+    private static DateTimeOffset ParsePublishedAt(JsonElement release)
+    {
+        if (release.TryGetProperty("published_at", out var pa) && pa.ValueKind == JsonValueKind.String
+            && DateTimeOffset.TryParse(pa.GetString(), out var dto))
         {
-            throw new InvalidOperationException("GitHub 上未找到可用的 win64 便携版 ffmpeg 资产");
+            return dto;
         }
-
-        return best;
+        return DateTimeOffset.UnixEpoch;
     }
 
     /// <summary>
-    /// 在单个 release 的资产列表中查找 win64 便携版 zip 的下载地址。
+    /// 在单个 release 的资产列表中查找 win64 便携版 zip 的下载地址与大小。
     /// 资产名随版本演进（旧: -portable_win64.zip；新: _portable_win64-clang-gpl.zip），
     /// 统一按「含 portable_win64 且以 .zip 结尾」匹配；portable_winarm64 不含该子串，不会误命中。
     /// </summary>
-    private static string? FindPortableZipUrl(JsonElement release)
+    private static (string? Url, long SizeBytes) FindPortableZipUrlWithSize(JsonElement release)
     {
         if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
         {
-            return null;
+            return (null, 0);
         }
 
         foreach (var asset in assets.EnumerateArray())
@@ -140,11 +212,14 @@ public sealed partial class UpdateService : IUpdateService
                 && name.Contains("portable_win64", StringComparison.OrdinalIgnoreCase)
                 && name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
             {
-                return asset.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
+                var url = asset.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
+                var size = asset.TryGetProperty("size", out var s) && s.ValueKind == JsonValueKind.Number
+                    ? s.GetInt64() : 0L;
+                return (url, size);
             }
         }
 
-        return null;
+        return (null, 0);
     }
 
     /// <inheritdoc/>

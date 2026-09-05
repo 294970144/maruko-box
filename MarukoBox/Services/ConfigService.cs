@@ -34,7 +34,11 @@ public enum UserLevel
 /// <summary>UserLevel 的解析与显示辅助。</summary>
 public static class UserLevels
 {
-    /// <summary>配置代码（default/expert/developer，大小写不敏感）→ 枚举；无效值回落 Default。</summary>
+    /// <summary>
+    /// 配置代码（default/expert/developer，大小写不敏感）→ 枚举；无效值回落 Default。
+    /// 注意：解析的是存储代码，与 UI 显示名无关；UI 改名（默认/高手/程序员 → 普通/高级/专家）
+    /// 不影响此解析路径，旧配置文件无需迁移。
+    /// </summary>
     public static UserLevel Parse(string? code) => code?.Trim().ToLowerInvariant() switch
     {
         "expert" => UserLevel.Expert,
@@ -50,19 +54,26 @@ public static class UserLevels
         _ => "default"
     };
 
-    /// <summary>枚举 → 设置页下拉的中文显示名。</summary>
+    /// <summary>
+    /// 枚举 → 设置页下拉的中文显示名。
+    /// v1.3.0 起改名为「普通 / 高级 / 专家」。
+    /// </summary>
     public static string ToDisplay(UserLevel level) => level switch
     {
-        UserLevel.Expert => "高手",
-        UserLevel.Developer => "程序员",
-        _ => "默认"
+        UserLevel.Expert => "高级",
+        UserLevel.Developer => "专家",
+        _ => "普通"
     };
 
-    /// <summary>设置页中文显示名 → 配置代码。</summary>
-    public static string DisplayToCode(string display) => display switch
+    /// <summary>
+    /// 设置页中文显示名 → 配置代码（大小写不敏感）。
+    /// 同时兼容 v1.2.0 及更早的命名（「默认 / 高手 / 程序员」），
+    /// 保证升级 v1.3.0 后既有用户的配置不会被识别成「默认级别」。
+    /// </summary>
+    public static string DisplayToCode(string display) => (display ?? string.Empty).Trim() switch
     {
-        "高手" => "expert",
-        "程序员" => "developer",
+        "高级" or "高手" or "Expert" => "expert",
+        "专家" or "程序员" or "Developer" => "developer",
         _ => "default"
     };
 }

@@ -41,17 +41,28 @@ public partial class SettingsViewModel : ObservableObject
         "跟随系统", "浅色模式", "深色模式"
     };
 
-    /// <summary>用户级别下拉选项（中文显示名；配置存储英文代码）。</summary>
+    /// <summary>
+    /// 用户级别下拉选项（v1.3.0 起改为「普通 / 高级 / 专家」；v1.2.0 及更早的
+    /// 「默认 / 高手 / 程序员」仍被 <see cref="UserLevels.DisplayToCode"/> 兼容映射）。
+    /// </summary>
     public ObservableCollection<string> UserLevelOptions { get; } = new()
     {
-        "默认", "高手", "程序员"
+        "普通", "高级", "专家"
     };
 
-    /// <summary>完成后动作下拉选项。</summary>
-    public ObservableCollection<string> AfterCompletionOptions { get; } = new()
-    {
-        "none", "shutdown", "hibernate", "exit"
-    };
+    /// <summary>
+    /// 「程序员」专列的 ffmpeg 版本列表（来自 GitHub releases 全量）。
+    /// 仅当用户级别 = 专家时显示；点过「检查依赖」或单独的「刷新版本列表」后填充。
+    /// 程序员可点击任意行强制安装，绕过 NVENC 驱动门槛。
+    /// </summary>
+    public ObservableCollection<FfmpegReleaseRow> FfmpegReleaseRows { get; } = new();
+
+    /// <summary>
+    /// ffmpeg 版本列表的整体可见性 = 用户级别 = 专家 且 已点过「刷新版本列表」。
+    /// （「检查依赖」也会一并刷新，故需求里"点过检查更新"等价覆盖。）
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsFfmpegListVisible { get; set; }
 
     /// <summary>当前用户级别（控制各页面控件显示范围；切换后重启生效）。</summary>
     public UserLevel UserLevel { get; } = UserLevels.Parse(AppServices.Config.Load().UserLevel);
@@ -70,9 +81,6 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string Theme { get; set; } = "跟随系统";
-
-    [ObservableProperty]
-    public partial string AfterCompletion { get; set; } = "none";
 
     [ObservableProperty]
     public partial int GpuDevice { get; set; }
@@ -105,7 +113,11 @@ public partial class SettingsViewModel : ObservableObject
 
     /// <summary>用户级别下拉的当前选中项（中文显示名）。</summary>
     [ObservableProperty]
-    public partial string SelectedUserLevel { get; set; } = "默认";
+    public partial string SelectedUserLevel { get; set; } = "普通";
+
+    /// <summary>本次保存前记录的「主题」「用户级别」原值，用于在重启弹窗中判定是否真的需要重启。</summary>
+    private string _savedThemeBeforeSave = string.Empty;
+    private string _savedUserLevelBeforeSave = string.Empty;
 
     public SettingsViewModel()
     {
@@ -113,9 +125,13 @@ public partial class SettingsViewModel : ObservableObject
         FfmpegPath = config.FfmpegPath;
         OutputDirectory = config.OutputDirectory;
         Theme = CodeToThemeDisplay(config.Theme);
-        AfterCompletion = config.AfterCompletion;
         GpuDevice = config.GpuDevice;
         SelectedUserLevel = UserLevels.ToDisplay(UserLevels.Parse(config.UserLevel));
+
+        // 记录"未保存前"的实际值，Save() 比对时使用——
+        // 避免 UI 控件绑定初期就把原值覆写成新值，导致重启判定永远为"未变"。
+        _savedThemeBeforeSave = Theme;
+        _savedUserLevelBeforeSave = SelectedUserLevel;
 
         SelectedEncoderOption = EncoderOptions.FirstOrDefault(o => o.Type.ToString() == config.DefaultEncoder)
                                 ?? EncoderOptions[0];
@@ -216,22 +232,91 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
-    /// <summary>保存配置到磁盘。</summary>
+    /// <summary>
+    /// 保存配置到磁盘。若本次保存涉及「主题」或「用户级别」与上次保存时不同，
+    /// 则弹"立即重启？"对话框，主按钮触发 <see cref="RestartApp"/>。
+    /// </summary>
     [RelayCommand]
-    private void Save()
+    private async Task SaveAsync()
     {
+        var themeChanged = Theme != _savedThemeBeforeSave;
+        var levelChanged = SelectedUserLevel != _savedUserLevelBeforeSave;
+
         var config = new AppConfig
         {
             FfmpegPath = FfmpegPath,
             DefaultEncoder = SelectedEncoderOption?.Type.ToString() ?? "Auto",
             Theme = ThemeToCode(Theme),
             OutputDirectory = OutputDirectory,
-            AfterCompletion = AfterCompletion,
             GpuDevice = GpuDevice,
             UserLevel = UserLevels.DisplayToCode(SelectedUserLevel)
         };
         _config.Save(config);
-        StatusMessage = "配置已保存（主题与用户级别需重启应用后生效）";
+
+        if (themeChanged || levelChanged)
+        {
+            StatusMessage = "配置已保存（主题 / 用户级别需重启应用后生效）";
+            if (await PromptRestartAsync())
+            {
+                RestartApp();
+                return;
+            }
+            // 用户选择稍后：刷新 baseline，下次 Save 同样值时不再提示。
+            _savedThemeBeforeSave = Theme;
+            _savedUserLevelBeforeSave = SelectedUserLevel;
+        }
+        else
+        {
+            StatusMessage = "配置已保存";
+        }
+    }
+
+    /// <summary>弹窗询问是否立即重启应用（主题 / 用户级别需重启生效）。</summary>
+    private static async Task<bool> PromptRestartAsync()
+    {
+        try
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = App.Window.Content.XamlRoot,
+                Title = "需要重启",
+                Content = "已保存配置。主题与用户级别需要重启应用后才能生效。\n\n是否立即重启？",
+                PrimaryButtonText = "立即重启",
+                CloseButtonText = "稍后",
+                DefaultButton = ContentDialogButton.Primary
+            };
+            return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 解绑式重启：先以 UseShellExecute 启动一个新进程（当前 exe），
+    /// 再 <see cref="Application.Exit"/> 让旧进程退出。
+    /// 这是 WinUI 3 unpackaged 唯一可靠的应用重启姿势（无 MSIX/AppLifecycle 桥接）。
+    /// </summary>
+    private static void RestartApp()
+    {
+        try
+        {
+            var exe = Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrEmpty(exe) && File.Exists(exe))
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = exe,
+                    UseShellExecute = true
+                });
+            }
+        }
+        catch
+        {
+            // 重启启动失败时，仍走 Exit 让用户自己手动重启
+        }
+        App.Current.Exit();
     }
 
     // ---------- 检查更新（软件自身，仅 GitHub） ----------
@@ -382,37 +467,37 @@ public partial class SettingsViewModel : ObservableObject
                     : "△ GPU 编码：未检测到可用编码器，将使用 CPU")
                 : $"✗ GPU 检测失败：{GpuInfo.ErrorMessage}");
 
-            // 5) 内置 ffmpeg 新版检查（GitHub；NVENC API ≥13.1 门槛）
+            // 5) 内置 ffmpeg 新版检查（GitHub；按本机驱动兼容性推荐）
             try
             {
-                var latest = await _update.GetLatestFfmpegAsync();
-                if (string.IsNullOrEmpty(local) || UpdateService.CompareVersions(local, latest.Tag) < 0)
+                var rec = await _update.GetRecommendedFfmpegAsync(GpuInfo);
+                if (!rec.Recommended)
                 {
-                    var offer = _update.ShouldOfferFfmpegUpdate(GpuInfo, latest.Tag);
-                    if (!offer.Offer)
+                    // 全部候选被驱动门槛拦截（最常见：N 卡驱动 <610 无法跑 8.x NVENC）
+                    sb.AppendLine($"△ 内置 ffmpeg 暂无可推送的新版：{rec.BlockReason}");
+                }
+                else if (string.IsNullOrEmpty(local)
+                         || UpdateService.CompareVersions(local, rec.RecommendedTag!) < 0)
+                {
+                    UpdateStatusMessage = sb.ToString().TrimEnd();
+                    var confirmed = await ConfirmFfmpegUpdateAsync(local, rec.RecommendedTag!);
+                    if (confirmed)
                     {
-                        // N 卡驱动过旧（NVENC API <13.1）：不推送，说明原因
-                        sb.AppendLine($"△ 内置 ffmpeg 新版 {latest.Tag}：{offer.BlockReason}");
+                        await InstallFfmpegUpdateAsync(new FfmpegInstallTarget(rec.RecommendedTag!, rec.RecommendedDownloadUrl!));
                     }
                     else
                     {
-                        UpdateStatusMessage = sb.ToString().TrimEnd();
-                        var confirmed = await ConfirmFfmpegUpdateAsync(local, latest.Tag);
-                        if (confirmed)
-                        {
-                            await InstallFfmpegUpdateAsync(latest);
-                        }
-                        else
-                        {
-                            UpdateStatusMessage = sb.ToString().TrimEnd() + "\n已取消更新内置 ffmpeg";
-                        }
-                        return;
+                        UpdateStatusMessage = sb.ToString().TrimEnd() + "\n已取消更新内置 ffmpeg";
                     }
+                    return;
                 }
                 else
                 {
                     sb.AppendLine($"✓ 内置 ffmpeg 已是最新（{local}）");
                 }
+
+                // 6) 「专家」专列版本列表：填充 FfmpegReleaseRows（点过本检查后可见）
+                await RefreshFfmpegListAsync();
             }
             catch (Exception ex)
             {
@@ -459,23 +544,116 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>下载并安装新版内置 ffmpeg（中断安全整目录替换），完成后重新检测。</summary>
-    private async Task InstallFfmpegUpdateAsync(RemoteFfmpegVersion latest)
+    private async Task InstallFfmpegUpdateAsync(FfmpegInstallTarget target)
     {
         IsDownloading = true;
         UpdateProgressPercent = 0;
         var progress = new Progress<double>(p => App.RunOnUiThread(() =>
         {
             UpdateProgressPercent = Math.Round(p, 1);
-            UpdateStatusMessage = $"正在下载 ffmpeg {latest.Tag}… {p:F0}%";
+            UpdateStatusMessage = $"正在下载 ffmpeg {target.Tag}… {p:F0}%";
         }));
 
-        await _update.DownloadAndInstallAsync(latest.DownloadUrl, latest.Tag, progress);
+        await _update.DownloadAndInstallAsync(target.DownloadUrl, target.Tag, progress);
 
         // 内置版本已替换：重新解析生效路径（内置优先）并刷新能力检测
         FfmpegPath = _config.Load().FfmpegPath;
-        BundledVersionText = latest.Tag;
-        UpdateStatusMessage = $"内置 ffmpeg 已更新到 {latest.Tag}";
+        BundledVersionText = target.Tag;
+        UpdateStatusMessage = $"内置 ffmpeg 已更新到 {target.Tag}";
 
         await DetectAsync();
+    }
+
+    /// <summary>ffmpeg 安装目标。包内 record，仅在「检查依赖」流程内部传递。</summary>
+    private sealed record FfmpegInstallTarget(string Tag, string DownloadUrl);
+
+    // ---------- 「专家」专列版本列表 ----------
+
+    /// <summary>
+    /// 从 GitHub 拉全量 jellyfin-ffmpeg release 并填充到 <see cref="FfmpegReleaseRows"/>。
+    /// 列表整体可见性 <see cref="IsFfmpegListVisible"/> 由用户级别（= 专家）
+    /// 与本集合是否非空共同决定；首次填充即视为"已经检查过下载站的文件列表"。
+    /// </summary>
+    [RelayCommand]
+    private async Task RefreshFfmpegListAsync()
+    {
+        try
+        {
+            var releases = await _update.GetAllFfmpegReleasesAsync();
+            FfmpegReleaseRows.Clear();
+            foreach (var r in releases)
+            {
+                var offer = _update.ShouldOfferFfmpegUpdate(GpuInfo, r.Tag);
+                FfmpegReleaseRows.Add(new FfmpegReleaseRow(r, offer, InstallFfmpegRowCommand));
+            }
+            IsFfmpegListVisible = UserLevel == UserLevel.Developer && FfmpegReleaseRows.Count > 0;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"加载版本列表失败：{ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// 供 XAML ListView 行内 [安装此版本] 按钮调用的入口：从 parameter 拿 <see cref="FfmpegReleaseRow"/>，
+    /// 程序员可绕过 NVENC 门槛强制安装任意版本。
+    /// </summary>
+    [RelayCommand]
+    private async Task InstallFfmpegRowAsync(FfmpegReleaseRow? row)
+    {
+        if (row is null || row.IsInstalling) return;
+
+        var confirmed = await ConfirmForceFfmpegInstallAsync(row);
+        if (!confirmed) return;
+
+        row.IsInstalling = true;
+        row.ProgressPercent = 0;
+        try
+        {
+            var progress = new Progress<double>(p => App.RunOnUiThread(() =>
+                row.ProgressPercent = Math.Round(p, 1)));
+            await _update.DownloadAndInstallAsync(row.AssetUrl, row.Tag, progress);
+
+            FfmpegPath = _config.Load().FfmpegPath;
+            BundledVersionText = row.Tag;
+            UpdateStatusMessage = $"已安装 ffmpeg {row.Tag}（专家模式，跳过驱动兼容检查）";
+            await DetectAsync();
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusMessage = $"安装 {row.Tag} 失败：{ex.Message}";
+        }
+        finally
+        {
+            row.IsInstalling = false;
+        }
+    }
+
+    /// <summary>「专家」安装任意版本前的二次确认（含驱动不兼容时的强装提示）。</summary>
+    private static async Task<bool> ConfirmForceFfmpegInstallAsync(FfmpegReleaseRow row)
+    {
+        try
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = App.Window.Content.XamlRoot,
+                Title = "安装此版本",
+                Content = row.IsCompatible
+                    ? $"将下载并安装 jellyfin-ffmpeg {row.Tag}（约 67 MB）。\n\n" +
+                      "安装期间请勿进行编码任务。"
+                    : $"将下载并安装 jellyfin-ffmpeg {row.Tag}（约 67 MB）。\n\n" +
+                      $"⚠ 本机当前 {row.CompatibleText}\n" +
+                      "强制安装后 NVENC 硬件编码可能不可用，但软件编码器照常使用。\n\n" +
+                      "是否继续？",
+                PrimaryButtonText = "继续安装",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Primary
+            };
+            return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

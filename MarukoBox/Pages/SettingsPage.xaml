@@ -238,13 +238,6 @@
                     <TextBlock Text="界面与行为" Style="{StaticResource BodyStrongTextBlockStyle}" />
 
                     <StackPanel Spacing="6">
-                        <TextBlock Text="编码完成后" Opacity="0.8" />
-                        <ComboBox ItemsSource="{x:Bind ViewModel.AfterCompletionOptions, Mode=OneWay}"
-                                  SelectedItem="{x:Bind ViewModel.AfterCompletion, Mode=TwoWay}"
-                                  Width="200" HorizontalAlignment="Left" />
-                    </StackPanel>
-
-                    <StackPanel Spacing="6">
                         <TextBlock Text="默认输出目录（留空则同目录）" Opacity="0.8" />
                         <Grid ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
@@ -255,6 +248,75 @@
                             <Button Grid.Column="1" Content="浏览…" Command="{x:Bind ViewModel.BrowseOutputCommand, Mode=OneWay}" />
                         </Grid>
                     </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 「专家」专列：内置 ffmpeg 版本列表 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    Visibility="{x:Bind ViewModel.IsFfmpegListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Spacing="10">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <FontIcon Grid.Column="0" Glyph="&#xE7B8;" FontSize="24"
+                                  VerticalAlignment="Center" />
+
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="内置 ffmpeg 版本列表（专家）" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Text="可强制安装任意版本，不检查驱动兼容性；驱动不兼容时 NVENC 硬件编码可能不可用，但软件编码器照常使用"
+                                       Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Button Grid.Column="2" Content="刷新版本列表"
+                                Command="{x:Bind ViewModel.RefreshFfmpegListCommand, Mode=OneWay}"
+                                VerticalAlignment="Center" />
+                    </Grid>
+
+                    <ListView ItemsSource="{x:Bind ViewModel.FfmpegReleaseRows, Mode=OneWay}"
+                              SelectionMode="None"
+                              MaxHeight="360">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:FfmpegReleaseRow">
+                                <Grid ColumnSpacing="12" Padding="4" VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="{x:Bind Tag}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                        <TextBlock Text="{x:Bind PublishedAtText}" Opacity="0.6" FontSize="11" />
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Column="1" Text="{x:Bind SizeText}" Opacity="0.8"
+                                               VerticalAlignment="Center" />
+
+                                    <Border Grid.Column="2" Padding="6,2" CornerRadius="3"
+                                            Background="#28E0A25E"
+                                            Visibility="{x:Bind IsPrerelease, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="prerelease" FontSize="10" Foreground="#FFE0A25E" />
+                                    </Border>
+
+                                    <TextBlock Grid.Column="3" Text="{x:Bind CompatibleText}" FontSize="12"
+                                               VerticalAlignment="Center" Margin="0,0,8,0" />
+
+                                    <Button Grid.Column="4" Content="安装此版本"
+                                            Command="{x:Bind InstallCommand}"
+                                            CommandParameter="{x:Bind Mode=OneWay}"
+                                            IsEnabled="{x:Bind IsInstalling, Mode=OneWay, Converter={StaticResource InvertBool}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
                 </StackPanel>
             </Border>
 

@@ -35,9 +35,9 @@
             Loaded="NavView_Loaded">
 
             <NavigationView.MenuItems>
-                <NavigationViewItem Content="抽取" Tag="Extract">
+                <NavigationViewItem Content="视频" Tag="Video" IsSelected="True">
                     <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Download" />
+                        <SymbolIcon Symbol="Video" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem Content="音频" Tag="Audio">
@@ -50,14 +50,14 @@
                         <SymbolIcon Symbol="Library" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="视频" Tag="Video" IsSelected="True">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Video" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
                 <NavigationViewItem Content="字幕" Tag="Subtitle">
                     <NavigationViewItem.Icon>
                         <SymbolIcon Symbol="Font" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="抽取" Tag="Extract">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Download" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem Content="图片" Tag="Image">

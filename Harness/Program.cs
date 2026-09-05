@@ -125,24 +125,69 @@ static async Task<int> UpdateSmokeAsync()
         return 1;
     }
 
-    // 3) 内置 ffmpeg 更新查询（GitHub jellyfin-ffmpeg）+ 真实 GPU 门槛判定
+    // 3) 内置 ffmpeg 更新查询（GitHub jellyfin-ffmpeg）+ 真实 GPU 门槛判定 + 推荐
     Console.WriteLine("\n--- 内置 ffmpeg 更新（GitHub jellyfin/jellyfin-ffmpeg） ---");
+    Console.WriteLine("\n--- v1.3.0: UserLevels 改名 + 兼容映射 ---");
     Console.Out.Flush();
-    RemoteFfmpegVersion latest;
+    var umCases = new (string Display, string ExpectCode)[]
+    {
+        ("普通", "default"),
+        ("高级", "expert"),
+        ("专家", "developer"),
+        // v1.2.0 旧显示名仍兼容（防止既有用户升级后被识别为「default」）
+        ("默认", "default"),
+        ("高手", "expert"),
+        ("程序员", "developer"),
+    };
+    var umFails = 0;
+    foreach (var c in umCases)
+    {
+        var code = UserLevels.DisplayToCode(c.Display);
+        var back = UserLevels.ToDisplay(UserLevels.Parse(code));
+        var pass = code == c.ExpectCode && back == c.Display;
+        if (!pass) umFails++;
+        Console.WriteLine($"  {(pass ? "PASS" : "FAIL")} DisplayToCode(\"{c.Display}\") = \"{code}\" (期望 \"{c.ExpectCode}\") → 回显 \"{back}\"");
+    }
+    Console.WriteLine($"  v1.3.0 UserLevel 映射: {(umFails == 0 ? "PASS" : "FAIL ({umFails} 项)")}");
+
+    // 4) AppConfig.AfterCompletion 字段弃用：旧 JSON 含该字段时 Load 不会报错（System.Text.Json 默认忽略）
+    Console.WriteLine("\n--- v1.3.0: AppConfig.AfterCompletion 反向兼容 ---");
+    Console.Out.Flush();
+    var oldCfgJson = "{\"AfterCompletion\":\"shutdown\",\"Theme\":\"Dark\",\"UserLevel\":\"developer\"}";
     try
     {
-        latest = await update.GetLatestFfmpegAsync();
-        Console.WriteLine($"远端最新: {latest.Tag}");
-        Console.WriteLine($"下载地址: {latest.DownloadUrl}");
+        var probe = System.Text.Json.JsonSerializer.Deserialize<MarukoBox.Services.AppConfig>(oldCfgJson);
+        // AfterCompletion 字段已删，探针对象只能取剩下的字段（实际拿不到 AfterCompletion，但 Deserialize 不抛即可）
+        var ok = probe is not null
+                 && probe.Theme == "Dark"
+                 && probe.UserLevel == "developer";
+        Console.WriteLine($"  {(ok ? "PASS" : "FAIL")} 旧 JSON 含 AfterCompletion 字段 → Deserialize 不抛异常、被忽略，其余字段正确");
+        if (!ok) umFails++;
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[FAIL] ffmpeg 更新查询失败: {ex.Message}");
-        return 1;
+        Console.WriteLine($"  FAIL  旧 JSON 解析异常: {ex.Message}");
+        umFails++;
     }
 
-    var localFfmpeg = update.GetLocalVersion();
-    Console.WriteLine($"本地内置: {(string.IsNullOrEmpty(localFfmpeg) ? "(无)" : localFfmpeg)}");
+    // 5) 内置 ffmpeg 更新（拉全部 release + 推荐兼容 + 真实下载安装）
+    Console.WriteLine("\n--- 内置 ffmpeg 更新（拉全量 + 驱动兼容推荐）---");
+    Console.Out.Flush();
+    IReadOnlyList<RemoteFfmpegRelease> releases;
+    try
+    {
+        releases = await update.GetAllFfmpegReleasesAsync();
+        Console.WriteLine($"拉到 {releases.Count} 个 release（按 tag 倒序示例）:");
+        foreach (var r in releases.Take(5))
+        {
+            Console.WriteLine($"  tag={r.Tag}  prerelease={r.IsPrerelease}  size={r.AssetSizeBytes / 1024 / 1024}MB  published={r.PublishedAt:yyyy-MM-dd}");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[FAIL] 拉取 ffmpeg 列表失败: {ex.Message}");
+        return 1;
+    }
 
     var ffmpegPath = ConfigService.ResolveFfmpegPath();
     GpuInfo realGpu = new();
@@ -151,27 +196,35 @@ static async Task<int> UpdateSmokeAsync()
         realGpu = await new GpuDetectionService().DetectAsync(ffmpegPath);
         Console.WriteLine($"真实 GPU: {realGpu.GpuName} 驱动 {realGpu.DriverVersion} NVENC API {realGpu.NvencApiVersion}");
     }
-    var offerReal = UpdateService.ShouldOfferFfmpegUpdateStatic(realGpu, latest.Tag);
-    Console.WriteLine($"门槛判定: offer={offerReal.Offer}" +
-        (offerReal.BlockReason is null ? string.Empty : $"（{offerReal.BlockReason}）"));
 
-    // 4) 本地落后且门槛通过时，执行真实下载安装（整目录替换）
-    if (string.IsNullOrEmpty(localFfmpeg) || UpdateService.CompareVersions(localFfmpeg, latest.Tag) < 0)
+    var rec = await update.GetRecommendedFfmpegAsync(realGpu);
+    Console.WriteLine($"按驱动兼容性推荐: recommended={rec.Recommended}" +
+        (rec.Recommended ? $" tag={rec.RecommendedTag}" : "") +
+        (rec.BlockReason is null ? string.Empty : $" 拦截原因={rec.BlockReason}"));
+
+    var localFfmpeg = update.GetLocalVersion();
+    Console.WriteLine($"本地内置: {(string.IsNullOrEmpty(localFfmpeg) ? "(无)" : localFfmpeg)}");
+
+    if (!rec.Recommended)
     {
-        if (!offerReal.Offer)
-        {
-            Console.WriteLine("本地落后但门槛不通过 → 不推送（符合预期行为，跳过下载）");
-            Console.WriteLine($"\n=== 更新链路冒烟: {(matrixFail == 0 ? "成功" : $"失败（矩阵 {matrixFail} 项）")} ===");
-            Console.Out.Flush();
-            return matrixFail == 0 ? 0 : 1;
-        }
+        Console.WriteLine("本地驱动被门槛拦截 → 不下载（符合预期）");
+        Console.WriteLine($"\n=== 更新链路冒烟: {(matrixFail == 0 && umFails == 0 ? "成功" : "失败")} ===");
+        Console.Out.Flush();
+        return (matrixFail == 0 && umFails == 0) ? 0 : 1;
+    }
 
-        Console.WriteLine("\n--- 下载并安装（整目录替换） ---");
+    var recommendedTag = rec.RecommendedTag!;
+    var recommendedUrl = rec.RecommendedDownloadUrl!;
+
+    // 6) 本地落后且门槛通过时，执行真实下载安装（整目录替换）
+    if (string.IsNullOrEmpty(localFfmpeg) || UpdateService.CompareVersions(localFfmpeg, recommendedTag) < 0)
+    {
+        Console.WriteLine("\n--- 下载并安装（按推荐版本，整目录替换） ---");
         Console.Out.Flush();
         var progress = new Progress<double>(p => Console.Write($"\r下载进度: {p:F0}%   "));
         try
         {
-            await update.DownloadAndInstallAsync(latest.DownloadUrl, latest.Tag, progress);
+            await update.DownloadAndInstallAsync(recommendedUrl, recommendedTag, progress);
             Console.WriteLine();
         }
         catch (Exception ex)
@@ -195,16 +248,17 @@ static async Task<int> UpdateSmokeAsync()
         proc.WaitForExit();
         Console.WriteLine($"ffmpeg -version: {firstLine}");
 
-        var ok = newVer == latest.Tag && proc.ExitCode == 0 && matrixFail == 0;
+        var ok = newVer == recommendedTag && proc.ExitCode == 0 && matrixFail == 0 && umFails == 0;
         Console.WriteLine($"\n=== 更新链路冒烟: {(ok ? "成功" : "失败")} ===");
         Console.Out.Flush();
         return ok ? 0 : 1;
     }
 
     Console.WriteLine("本地已是最新，跳过下载。");
-    Console.WriteLine($"\n=== 更新链路冒烟: {(matrixFail == 0 ? "成功" : $"失败（矩阵 {matrixFail} 项）")} ===");
+    var done = matrixFail == 0 && umFails == 0;
+    Console.WriteLine($"\n=== 更新链路冒烟: {(done ? "成功" : "失败")} ===");
     Console.Out.Flush();
-    return matrixFail == 0 ? 0 : 1;
+    return done ? 0 : 1;
 }
 
 // ---------- 更新中断自愈冒烟：直接制造中断现场，验证 RecoverBundledBackup ----------
