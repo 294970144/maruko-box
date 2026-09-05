@@ -24,16 +24,14 @@ public partial class VideoViewModel : ObservableObject
     /// <summary>批量队列。</summary>
     public ObservableCollection<EncodeItem> Queue { get; } = new();
 
-    public ObservableCollection<EncoderOption> EncoderOptions { get; } = new()
-    {
-        new() { Type = EncoderType.Auto, Name = "自动检测（推荐）" },
-        new() { Type = EncoderType.NvencHevc, Name = "NVIDIA NVENC (HEVC)" },
-        new() { Type = EncoderType.NvencH264, Name = "NVIDIA NVENC (H.264)" },
-        new() { Type = EncoderType.AmfHevc, Name = "AMD AMF (HEVC)" },
-        new() { Type = EncoderType.QsvHevc, Name = "Intel QSV (HEVC)" },
-        new() { Type = EncoderType.X264, Name = "x264 (CPU)" },
-        new() { Type = EncoderType.X265, Name = "x265 (CPU)" }
-    };
+    /// <summary>当前用户级别（控制界面控件显示范围；重启生效）。</summary>
+    public UserLevel UserLevel { get; } = UserLevels.Parse(AppServices.Config.Load().UserLevel);
+
+    /// <summary>
+    /// 编码器下拉选项：默认（小白）级别只保留 自动/NVENC/x264 三项，
+    /// 高手及以上显示全部（含 AMF/QSV/NVENC H.264/x265）。构造函数中初始化。
+    /// </summary>
+    public ObservableCollection<EncoderOption> EncoderOptions { get; }
 
     public ObservableCollection<OptionEntry> RateControlOptions { get; } = new()
     {
@@ -180,6 +178,21 @@ public partial class VideoViewModel : ObservableObject
 
     public VideoViewModel()
     {
+        var all = new[]
+        {
+            new EncoderOption { Type = EncoderType.Auto, Name = "自动检测（推荐）" },
+            new EncoderOption { Type = EncoderType.NvencHevc, Name = "NVIDIA NVENC (HEVC)" },
+            new EncoderOption { Type = EncoderType.NvencH264, Name = "NVIDIA NVENC (H.264)" },
+            new EncoderOption { Type = EncoderType.AmfHevc, Name = "AMD AMF (HEVC)" },
+            new EncoderOption { Type = EncoderType.QsvHevc, Name = "Intel QSV (HEVC)" },
+            new EncoderOption { Type = EncoderType.X264, Name = "x264 (CPU)" },
+            new EncoderOption { Type = EncoderType.X265, Name = "x265 (CPU)" }
+        };
+        EncoderOptions = new ObservableCollection<EncoderOption>(
+            UserLevel == UserLevel.Default
+                ? all.Where(o => o.Type is EncoderType.Auto or EncoderType.NvencHevc or EncoderType.X264)
+                : all);
+
         var config = _config.Load();
         GpuDevice = config.GpuDevice;
 

@@ -13,6 +13,7 @@
         <conv:BoolToVisibility x:Key="BoolToVisibility" />
         <conv:InvertBool x:Key="InvertBool" />
         <conv:InvertBoolToVisibility x:Key="InvertBoolToVisibility" />
+        <conv:UserLevelToVisibility x:Key="UserLevelToVisibility" />
     </Page.Resources>
 
     <Grid ColumnSpacing="16" Padding="24">
@@ -94,7 +95,9 @@
                     <StackPanel Spacing="12">
                         <TextBlock Text="GPU 编码参数" Style="{StaticResource BodyStrongTextBlockStyle}" />
 
-                        <StackPanel Spacing="6">
+                        <!-- 码率控制（高手及以上） -->
+                        <StackPanel Spacing="6"
+                                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                             <TextBlock Text="码率控制" Opacity="0.8" />
                             <ComboBox ItemsSource="{x:Bind ViewModel.RateControlOptions, Mode=OneWay}"
                                       DisplayMemberPath="Name" SelectedValuePath="Value"
@@ -112,27 +115,32 @@
                                        FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
                         </StackPanel>
 
-                        <!-- 码率类 -->
+                        <!-- 码率类（高手及以上） -->
                         <StackPanel Spacing="6"
-                                    Visibility="{x:Bind ViewModel.ShowGpuBitrate, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="目标码率 (kbps)" Opacity="0.8" />
-                            <NumberBox Value="{x:Bind ViewModel.Settings.BitrateKbps, Mode=TwoWay}"
-                                       Minimum="100" SmallChange="100" SpinButtonPlacementMode="Compact" />
-                            <TextBlock Text="最大码率 (kbps)" Opacity="0.8" />
-                            <NumberBox Value="{x:Bind ViewModel.Settings.MaxBitrateKbps, Mode=TwoWay}"
-                                       Minimum="100" SmallChange="100" SpinButtonPlacementMode="Compact" />
-                            <TextBlock Text="缓冲区 (kbps)" Opacity="0.8" />
-                            <NumberBox Value="{x:Bind ViewModel.Settings.BufferSizeKbps, Mode=TwoWay}"
-                                       Minimum="100" SmallChange="100" SpinButtonPlacementMode="Compact" />
+                                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
+                            <StackPanel Spacing="6"
+                                        Visibility="{x:Bind ViewModel.ShowGpuBitrate, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="目标码率 (kbps)" Opacity="0.8" />
+                                <NumberBox Value="{x:Bind ViewModel.Settings.BitrateKbps, Mode=TwoWay}"
+                                           Minimum="100" SmallChange="100" SpinButtonPlacementMode="Compact" />
+                                <TextBlock Text="最大码率 (kbps)" Opacity="0.8" />
+                                <NumberBox Value="{x:Bind ViewModel.Settings.MaxBitrateKbps, Mode=TwoWay}"
+                                           Minimum="100" SmallChange="100" SpinButtonPlacementMode="Compact" />
+                                <TextBlock Text="缓冲区 (kbps)" Opacity="0.8" />
+                                <NumberBox Value="{x:Bind ViewModel.Settings.BufferSizeKbps, Mode=TwoWay}"
+                                           Minimum="100" SmallChange="100" SpinButtonPlacementMode="Compact" />
+                            </StackPanel>
                         </StackPanel>
 
-                        <StackPanel Spacing="6">
+                        <StackPanel Spacing="6"
+                                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                             <TextBlock Text="Preset (p1~p7)" Opacity="0.8" />
                             <NumberBox Value="{x:Bind ViewModel.Settings.GpuPreset, Mode=TwoWay}"
                                        Minimum="1" Maximum="7" SmallChange="1" SpinButtonPlacementMode="Compact" Width="160" />
                         </StackPanel>
 
-                        <StackPanel Spacing="6">
+                        <StackPanel Spacing="6"
+                                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                             <TextBlock Text="Profile" Opacity="0.8" />
                             <ComboBox ItemsSource="{x:Bind ViewModel.ProfileOptions, Mode=OneWay}"
                                       DisplayMemberPath="Name" SelectedValuePath="Value"
@@ -140,7 +148,8 @@
                                       Width="160" HorizontalAlignment="Left" />
                         </StackPanel>
 
-                        <StackPanel Spacing="6">
+                        <StackPanel Spacing="6"
+                                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                             <TextBlock Text="Tune" Opacity="0.8" />
                             <ComboBox ItemsSource="{x:Bind ViewModel.GpuTuneOptions, Mode=OneWay}"
                                       SelectedItem="{x:Bind ViewModel.SelectedGpuTune, Mode=TwoWay}"
@@ -157,35 +166,42 @@
                     <StackPanel Spacing="12">
                         <TextBlock Text="CPU 编码参数" Style="{StaticResource BodyStrongTextBlockStyle}" />
 
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="模式" Opacity="0.8" />
-                            <ComboBox ItemsSource="{x:Bind ViewModel.CpuModeOptions, Mode=OneWay}"
-                                      DisplayMemberPath="Name" SelectedValuePath="Value"
-                                      SelectedValue="{x:Bind ViewModel.SelectedCpuMode, Mode=TwoWay}"
-                                      HorizontalAlignment="Stretch" />
-                        </StackPanel>
+                    <StackPanel Spacing="6"
+                                Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
+                        <TextBlock Text="模式" Opacity="0.8" />
+                        <ComboBox ItemsSource="{x:Bind ViewModel.CpuModeOptions, Mode=OneWay}"
+                                  DisplayMemberPath="Name" SelectedValuePath="Value"
+                                  SelectedValue="{x:Bind ViewModel.SelectedCpuMode, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch" />
+                    </StackPanel>
 
-                        <StackPanel Spacing="6"
-                                    Visibility="{x:Bind ViewModel.ShowCpuCrf, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="CRF (0~51，越低越好)" Opacity="0.8" />
-                            <NumberBox Value="{x:Bind ViewModel.Settings.Crf, Mode=TwoWay}"
-                                       Minimum="0" Maximum="51" SmallChange="1" SpinButtonPlacementMode="Compact" />
-                        </StackPanel>
+                    <StackPanel Spacing="6"
+                                Visibility="{x:Bind ViewModel.ShowCpuCrf, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="CRF (0~51，越低越好)" Opacity="0.8" />
+                        <NumberBox Value="{x:Bind ViewModel.Settings.Crf, Mode=TwoWay}"
+                                   Minimum="0" Maximum="51" SmallChange="1" SpinButtonPlacementMode="Compact" />
+                    </StackPanel>
 
+                    <StackPanel Spacing="6"
+                                Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                         <StackPanel Spacing="6"
                                     Visibility="{x:Bind ViewModel.ShowCpuBitrate, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Text="码率 (kbps)" Opacity="0.8" />
                             <NumberBox Value="{x:Bind ViewModel.Settings.BitrateKbps, Mode=TwoWay}"
                                        Minimum="100" SmallChange="100" SpinButtonPlacementMode="Compact" />
                         </StackPanel>
+                    </StackPanel>
 
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Preset" Opacity="0.8" />
-                            <ComboBox ItemsSource="{x:Bind ViewModel.CpuPresetOptions, Mode=OneWay}"
-                                      SelectedItem="{x:Bind ViewModel.SelectedCpuPreset, Mode=TwoWay}"
-                                      HorizontalAlignment="Stretch" />
-                        </StackPanel>
+                    <StackPanel Spacing="6"
+                                Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
+                        <TextBlock Text="Preset" Opacity="0.8" />
+                        <ComboBox ItemsSource="{x:Bind ViewModel.CpuPresetOptions, Mode=OneWay}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedCpuPreset, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch" />
+                    </StackPanel>
 
+                    <StackPanel Spacing="6"
+                                Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Developer'}">
                         <StackPanel Spacing="6"
                                     Visibility="{x:Bind ViewModel.ShowCpuCustom, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Text="自定义 ffmpeg 视频参数" Opacity="0.8" />
@@ -193,6 +209,7 @@
                                      PlaceholderText="-crf 18 -preset slow（仅视频编码器参数，不含 -i / -c:v / 输出）"
                                      AcceptsReturn="True" TextWrapping="Wrap" MinHeight="64" />
                         </StackPanel>
+                    </StackPanel>
                     </StackPanel>
                 </Border>
 
@@ -222,7 +239,9 @@
                                       Width="160" HorizontalAlignment="Left" />
                         </StackPanel>
 
-                        <StackPanel Spacing="6">
+                        <!-- 音轨/字幕（高手及以上） -->
+                        <StackPanel Spacing="6"
+                                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                             <TextBlock Text="音轨" Opacity="0.8" />
                             <ComboBox ItemsSource="{x:Bind ViewModel.AudioOptions, Mode=OneWay}"
                                       DisplayMemberPath="Name" SelectedValuePath="Value"
@@ -230,7 +249,8 @@
                                       HorizontalAlignment="Stretch" />
                         </StackPanel>
 
-                        <StackPanel Spacing="6">
+                        <StackPanel Spacing="6"
+                                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                             <TextBlock Text="字幕" Opacity="0.8" />
                             <ComboBox ItemsSource="{x:Bind ViewModel.SubtitleOptions, Mode=OneWay}"
                                       DisplayMemberPath="Name" SelectedValuePath="Value"

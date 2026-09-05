@@ -4,7 +4,6 @@ using System.IO;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MarukoBox.Converters;
 using MarukoBox.Models;
 using MarukoBox.Services;
 using Microsoft.UI.Xaml.Controls;
@@ -13,8 +12,9 @@ using Windows.Storage.Pickers;
 namespace MarukoBox.ViewModels;
 
 /// <summary>
-/// 设置页 ViewModel：负责 GPU/ffmpeg 能力检测、ffmpeg 路径选择、
-/// 内置 ffmpeg 的检查更新与依赖检查、默认编码参数与配置持久化。
+/// 设置页 ViewModel：负责软件更新检查（仅 GitHub）、依赖（ffmpeg）体检与内置 ffmpeg
+/// 更新（含 NVENC API 门槛）、GPU 能力检测、用户级别/主题/默认编码参数与配置持久化。
+/// 「检查更新」只查软件自身新版本；ffmpeg 相关检测归「检查依赖」。
 /// 采用 partial property 语法以符合 WinUI 3 规范。
 /// </summary>
 public partial class SettingsViewModel : ObservableObject
@@ -41,10 +41,10 @@ public partial class SettingsViewModel : ObservableObject
         "跟随系统", "浅色模式", "深色模式"
     };
 
-    /// <summary>更新渠道下拉选项（中文显示名；配置存储 mirror / github）。</summary>
-    public ObservableCollection<string> UpdateChannelOptions { get; } = new()
+    /// <summary>用户级别下拉选项（中文显示名；配置存储英文代码）。</summary>
+    public ObservableCollection<string> UserLevelOptions { get; } = new()
     {
-        "国内镜像站", "GitHub"
+        "默认", "高手", "程序员"
     };
 
     /// <summary>完成后动作下拉选项。</summary>
@@ -52,6 +52,9 @@ public partial class SettingsViewModel : ObservableObject
     {
         "none", "shutdown", "hibernate", "exit"
     };
+
+    /// <summary>当前用户级别（控制各页面控件显示范围；切换后重启生效）。</summary>
+    public UserLevel UserLevel { get; } = UserLevels.Parse(AppServices.Config.Load().UserLevel);
 
     [ObservableProperty]
     public partial GpuInfo GpuInfo { get; set; } = new();
@@ -80,8 +83,13 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial string StatusMessage { get; set; } = "未检测";
 
+    /// <summary>检查更新卡片的副标题：当前软件版本。</summary>
     [ObservableProperty]
     public partial string LocalVersionText { get; set; } = string.Empty;
+
+    /// <summary>硬件能力卡片中显示的内置 ffmpeg 版本（jellyfin-ffmpeg 标记）。</summary>
+    [ObservableProperty]
+    public partial string BundledVersionText { get; set; } = string.Empty;
 
     [ObservableProperty]
     public partial bool IsCheckingUpdate { get; set; }
@@ -95,8 +103,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial string UpdateStatusMessage { get; set; } = string.Empty;
 
+    /// <summary>用户级别下拉的当前选中项（中文显示名）。</summary>
     [ObservableProperty]
-    public partial string SelectedUpdateChannel { get; set; } = "国内镜像站";
+    public partial string SelectedUserLevel { get; set; } = "默认";
 
     public SettingsViewModel()
     {
@@ -106,17 +115,22 @@ public partial class SettingsViewModel : ObservableObject
         Theme = CodeToThemeDisplay(config.Theme);
         AfterCompletion = config.AfterCompletion;
         GpuDevice = config.GpuDevice;
-        SelectedUpdateChannel = UpdateService.ChannelDisplayName(UpdateService.ParseChannel(config.UpdateChannel));
+        SelectedUserLevel = UserLevels.ToDisplay(UserLevels.Parse(config.UserLevel));
 
         SelectedEncoderOption = EncoderOptions.FirstOrDefault(o => o.Type.ToString() == config.DefaultEncoder)
                                 ?? EncoderOptions[0];
 
-        var localVer = _update.GetLocalVersion();
-        LocalVersionText = string.IsNullOrEmpty(localVer)
-            ? "未内置（使用外部 ffmpeg）"
-            : $"当前内置版本：{localVer}";
+        LocalVersionText = $"当前版本：{UpdateService.GetAppVersionStatic()}";
+        BundledVersionText = GetBundledDisplayText();
 
         _ = DetectAsync();
+    }
+
+    /// <summary>内置 ffmpeg 版本的显示文案。</summary>
+    private static string GetBundledDisplayText()
+    {
+        var ver = ConfigService.GetBundledVersion();
+        return string.IsNullOrEmpty(ver) ? "无（使用外部 ffmpeg）" : ver;
     }
 
     // ---------- 主题显示名 <-> 配置代码 ----------
@@ -135,7 +149,7 @@ public partial class SettingsViewModel : ObservableObject
         _ => "跟随系统"
     };
 
-    /// <summary>重新检测硬件能力。</summary>
+    /// <summary>重新检测硬件能力（含 ffmpeg 运行版本与内置版本刷新）。</summary>
     [RelayCommand]
     private async Task DetectAsync()
     {
@@ -151,6 +165,7 @@ public partial class SettingsViewModel : ObservableObject
         {
             var info = await _gpu.DetectAsync(FfmpegPath);
             GpuInfo = info;
+            BundledVersionText = GetBundledDisplayText();
             StatusMessage = info.DetectionSucceeded
                 ? (info.HasAnyGpuEncoder ? "检测完成，GPU 编码器可用" : "检测完成，将使用 CPU 编码")
                 : $"检测失败：{info.ErrorMessage}";
@@ -213,18 +228,18 @@ public partial class SettingsViewModel : ObservableObject
             OutputDirectory = OutputDirectory,
             AfterCompletion = AfterCompletion,
             GpuDevice = GpuDevice,
-            // 中文显示名 -> 存储代码（非 "GitHub" 一律视为国内镜像）
-            UpdateChannel = SelectedUpdateChannel == "GitHub" ? "github" : "mirror"
+            UserLevel = UserLevels.DisplayToCode(SelectedUserLevel)
         };
         _config.Save(config);
-        StatusMessage = "配置已保存（主题需重启应用后生效）";
+        StatusMessage = "配置已保存（主题与用户级别需重启应用后生效）";
     }
 
-    // ---------- 检查更新 ----------
+    // ---------- 检查更新（软件自身，仅 GitHub） ----------
 
     /// <summary>
-    /// 检查内置 ffmpeg 更新：查询当前渠道最新版本，与本地比较，
-    /// 有新版时弹窗确认并下载安装（整目录替换），完成后自动重新检测。
+    /// 检查 MarukoBox 软件更新：查询 GitHub 最新 Release 与当前版本比较，
+    /// 有新版时弹窗确认并下载安装包，完成后启动安装程序并退出应用。
+    /// 不检查 ffmpeg 依赖——那归「检查依赖」。
     /// </summary>
     [RelayCommand]
     private async Task CheckUpdateAsync()
@@ -237,23 +252,20 @@ public partial class SettingsViewModel : ObservableObject
         IsCheckingUpdate = true;
         IsDownloading = false;
         UpdateProgressPercent = 0;
-        UpdateStatusMessage = "正在检查更新…";
+        UpdateStatusMessage = "正在检查软件更新…";
         try
         {
-            var channel = SelectedUpdateChannel == "GitHub" ? UpdateChannel.GitHub : UpdateChannel.Mirror;
-            var latest = await _update.GetLatestVersionAsync(channel);
-            var local = _update.GetLocalVersion();
+            var latest = await _update.GetLatestAppReleaseAsync();
+            var current = _update.GetAppVersion();
 
             // 版本级比较（容忍 v 前缀差异），而非字符串相等
-            if (!string.IsNullOrEmpty(local) && UpdateService.CompareVersions(local, latest.Tag) == 0)
+            if (UpdateService.CompareVersions(current, latest.Version) >= 0)
             {
-                UpdateStatusMessage = $"已是最新版本（{local}）";
+                UpdateStatusMessage = $"已是最新版本（{current}）";
                 return;
             }
 
-            var localText = string.IsNullOrEmpty(local) ? "未安装内置 ffmpeg" : local;
-            var sizeHint = channel == UpdateChannel.GitHub ? "约 34 MB" : "约 34 MB";
-            var confirmed = await ConfirmUpdateAsync(localText, latest.Tag, sizeHint);
+            var confirmed = await ConfirmAppUpdateAsync(current, latest.Tag);
             if (!confirmed)
             {
                 UpdateStatusMessage = "已取消更新";
@@ -261,25 +273,28 @@ public partial class SettingsViewModel : ObservableObject
             }
 
             IsDownloading = true;
-            var channelName = UpdateService.ChannelDisplayName(channel);
             var progress = new Progress<double>(p => App.RunOnUiThread(() =>
             {
                 UpdateProgressPercent = Math.Round(p, 1);
-                UpdateStatusMessage = $"正在从{channelName}下载 {latest.Tag}… {p:F0}%";
+                UpdateStatusMessage = $"正在下载 {latest.Tag} 安装包… {p:F0}%";
             }));
 
-            await _update.DownloadAndInstallAsync(latest.DownloadUrl, latest.Tag, progress);
+            var installer = await _update.DownloadAppInstallerAsync(
+                latest.DownloadUrl, latest.Version, progress);
 
-            // 内置版本已替换：重新解析生效路径（内置优先）并刷新能力检测
-            FfmpegPath = _config.Load().FfmpegPath;
-            LocalVersionText = $"当前内置版本：{latest.Tag}";
-            UpdateStatusMessage = $"更新完成，内置 ffmpeg 已升级到 {latest.Tag}";
+            UpdateStatusMessage = $"安装包已就绪，正在启动安装程序（{latest.Tag}）…";
+            await Task.Delay(600); // 让用户看到状态再退出
 
-            await DetectAsync();
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = installer,
+                UseShellExecute = true
+            });
+            App.Current.Exit();
         }
         catch (Exception ex)
         {
-            UpdateStatusMessage = $"更新失败：{ex.Message}";
+            UpdateStatusMessage = $"检查更新失败：{ex.Message}";
         }
         finally
         {
@@ -289,8 +304,8 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
-    /// <summary>弹窗确认是否下载安装新版本。</summary>
-    private async Task<bool> ConfirmUpdateAsync(string localVersion, string newVersion, string sizeHint)
+    /// <summary>弹窗确认是否下载安装新软件版本。</summary>
+    private async Task<bool> ConfirmAppUpdateAsync(string currentVersion, string newTag)
     {
         try
         {
@@ -298,8 +313,8 @@ public partial class SettingsViewModel : ObservableObject
             {
                 XamlRoot = App.Window.Content.XamlRoot,
                 Title = "发现新版本",
-                Content = $"当前内置 ffmpeg：{localVersion}\n最新版本：{newVersion}\n\n" +
-                          $"是否下载并安装？（{sizeHint}，安装期间请勿进行编码任务）",
+                Content = $"当前版本：{currentVersion}\n最新版本：{newTag}\n\n" +
+                          "是否下载并安装？（约 100 MB，下载完成后将启动安装程序，本应用将退出）",
                 PrimaryButtonText = "下载并安装",
                 CloseButtonText = "取消",
                 DefaultButton = ContentDialogButton.Primary
@@ -314,49 +329,153 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
-    // ---------- 检查依赖 ----------
+    // ---------- 检查依赖（ffmpeg 体检 + 内置 ffmpeg 更新） ----------
 
     /// <summary>
-    /// 检查运行依赖：ffmpeg / ffprobe 存在性与位置、内置版本标记、GPU 编码能力。
-    /// 结果汇总写入更新状态消息。
+    /// 检查运行依赖：ffmpeg / ffprobe 存在性与位置、内置版本标记、GPU 编码能力，
+    /// 并查询内置 ffmpeg 新版（GitHub）——通过 NVENC API 门槛判定后提示更新。
     /// </summary>
     [RelayCommand]
     private async Task CheckDependenciesAsync()
     {
+        if (IsCheckingUpdate)
+        {
+            return;
+        }
+
+        IsCheckingUpdate = true;
         UpdateStatusMessage = "正在检查依赖…";
         var sb = new StringBuilder();
 
-        // 1) ffmpeg 生效路径
-        var ffmpegPath = _config.Load().FfmpegPath;
-        if (string.IsNullOrWhiteSpace(ffmpegPath) || !File.Exists(ffmpegPath))
+        try
         {
-            sb.AppendLine("✗ ffmpeg：未找到（请使用「检查更新」安装内置版，或手动设置路径）");
+            // 1) ffmpeg 生效路径
+            var ffmpegPath = _config.Load().FfmpegPath;
+            if (string.IsNullOrWhiteSpace(ffmpegPath) || !File.Exists(ffmpegPath))
+            {
+                sb.AppendLine("✗ ffmpeg：未找到（可在下方安装内置版，或手动设置路径）");
+            }
+            else
+            {
+                FfmpegPath = ffmpegPath; // 同步 UI 属性，确保随后的能力检测使用同一份路径
+                sb.AppendLine($"✓ ffmpeg：{ffmpegPath}");
+
+                // 2) ffprobe（与 ffmpeg 同目录）
+                var probePath = Path.Combine(Path.GetDirectoryName(ffmpegPath) ?? ".", "ffprobe.exe");
+                sb.AppendLine(File.Exists(probePath)
+                    ? $"✓ ffprobe：{probePath}"
+                    : "△ ffprobe：未找到（媒体信息相关功能不可用）");
+            }
+
+            // 3) 内置版本标记
+            var local = _update.GetLocalVersion();
+            BundledVersionText = string.IsNullOrEmpty(local) ? "无（使用外部 ffmpeg）" : local;
+            sb.AppendLine(string.IsNullOrEmpty(local)
+                ? "△ 内置 ffmpeg：无（使用外部 ffmpeg）"
+                : $"✓ 内置 ffmpeg：{local}");
+
+            // 4) GPU 编码能力快检（同时刷新 ffmpeg 运行版本）
+            await DetectAsync();
+            sb.AppendLine(GpuInfo.DetectionSucceeded
+                ? (GpuInfo.HasAnyGpuEncoder
+                    ? $"✓ GPU 编码：{GpuInfo.GpuName}"
+                    : "△ GPU 编码：未检测到可用编码器，将使用 CPU")
+                : $"✗ GPU 检测失败：{GpuInfo.ErrorMessage}");
+
+            // 5) 内置 ffmpeg 新版检查（GitHub；NVENC API ≥13.1 门槛）
+            try
+            {
+                var latest = await _update.GetLatestFfmpegAsync();
+                if (string.IsNullOrEmpty(local) || UpdateService.CompareVersions(local, latest.Tag) < 0)
+                {
+                    var offer = _update.ShouldOfferFfmpegUpdate(GpuInfo, latest.Tag);
+                    if (!offer.Offer)
+                    {
+                        // N 卡驱动过旧（NVENC API <13.1）：不推送，说明原因
+                        sb.AppendLine($"△ 内置 ffmpeg 新版 {latest.Tag}：{offer.BlockReason}");
+                    }
+                    else
+                    {
+                        UpdateStatusMessage = sb.ToString().TrimEnd();
+                        var confirmed = await ConfirmFfmpegUpdateAsync(local, latest.Tag);
+                        if (confirmed)
+                        {
+                            await InstallFfmpegUpdateAsync(latest);
+                        }
+                        else
+                        {
+                            UpdateStatusMessage = sb.ToString().TrimEnd() + "\n已取消更新内置 ffmpeg";
+                        }
+                        return;
+                    }
+                }
+                else
+                {
+                    sb.AppendLine($"✓ 内置 ffmpeg 已是最新（{local}）");
+                }
+            }
+            catch (Exception ex)
+            {
+                sb.AppendLine($"△ 检查 ffmpeg 新版失败：{ex.Message}");
+            }
+
             UpdateStatusMessage = sb.ToString().TrimEnd();
-            return;
         }
-        FfmpegPath = ffmpegPath; // 同步 UI 属性，确保随后的能力检测使用同一份路径
-        sb.AppendLine($"✓ ffmpeg：{ffmpegPath}");
+        catch (Exception ex)
+        {
+            UpdateStatusMessage = $"依赖检查失败：{ex.Message}";
+        }
+        finally
+        {
+            IsCheckingUpdate = false;
+            IsDownloading = false;
+            UpdateProgressPercent = 0;
+        }
+    }
 
-        // 2) ffprobe（与 ffmpeg 同目录）
-        var probePath = Path.Combine(Path.GetDirectoryName(ffmpegPath) ?? ".", "ffprobe.exe");
-        sb.AppendLine(File.Exists(probePath)
-            ? $"✓ ffprobe：{probePath}"
-            : "△ ffprobe：未找到（媒体信息相关功能不可用）");
+    /// <summary>弹窗确认是否下载安装新版内置 ffmpeg。</summary>
+    private async Task<bool> ConfirmFfmpegUpdateAsync(string? localVersion, string newVersion)
+    {
+        try
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = App.Window.Content.XamlRoot,
+                Title = "发现新版本",
+                Content = $"当前内置 ffmpeg：{(string.IsNullOrEmpty(localVersion) ? "未安装" : localVersion)}\n" +
+                          $"最新版本：{newVersion}\n\n" +
+                          "是否下载并安装？（约 67 MB，安装期间请勿进行编码任务）",
+                PrimaryButtonText = "下载并安装",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Primary
+            };
+            var result = await dialog.ShowAsync();
+            return result == ContentDialogResult.Primary;
+        }
+        catch
+        {
+            return true;
+        }
+    }
 
-        // 3) 内置版本标记
-        var ver = _update.GetLocalVersion();
-        sb.AppendLine(string.IsNullOrEmpty(ver)
-            ? "△ 内置版本标记：无（使用外部 ffmpeg）"
-            : $"✓ 内置版本：{ver}");
+    /// <summary>下载并安装新版内置 ffmpeg（中断安全整目录替换），完成后重新检测。</summary>
+    private async Task InstallFfmpegUpdateAsync(RemoteFfmpegVersion latest)
+    {
+        IsDownloading = true;
+        UpdateProgressPercent = 0;
+        var progress = new Progress<double>(p => App.RunOnUiThread(() =>
+        {
+            UpdateProgressPercent = Math.Round(p, 1);
+            UpdateStatusMessage = $"正在下载 ffmpeg {latest.Tag}… {p:F0}%";
+        }));
 
-        // 4) GPU 编码能力快检
+        await _update.DownloadAndInstallAsync(latest.DownloadUrl, latest.Tag, progress);
+
+        // 内置版本已替换：重新解析生效路径（内置优先）并刷新能力检测
+        FfmpegPath = _config.Load().FfmpegPath;
+        BundledVersionText = latest.Tag;
+        UpdateStatusMessage = $"内置 ffmpeg 已更新到 {latest.Tag}";
+
         await DetectAsync();
-        sb.AppendLine(GpuInfo.DetectionSucceeded
-            ? (GpuInfo.HasAnyGpuEncoder
-                ? $"✓ GPU 编码：{GpuInfo.GpuName}"
-                : "△ GPU 编码：未检测到可用编码器，将使用 CPU")
-            : $"✗ GPU 检测失败：{GpuInfo.ErrorMessage}");
-
-        UpdateStatusMessage = sb.ToString().TrimEnd();
     }
 }

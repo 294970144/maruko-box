@@ -12,8 +12,9 @@
 - **字幕**：提取、嵌入、字幕格式转换
 - **封装 (Mux)**：音视频流重新封装
 - **内置 ffmpeg**：安装包捆绑 [jellyfin-ffmpeg](https://github.com/jellyfin/jellyfin-ffmpeg) 便携版，开箱即用，无需自行下载
-- **检查更新**：设置页一键检查/升级内置 ffmpeg，支持国内镜像站与 GitHub 双渠道
+- **检查更新 / 检查依赖**：软件自身从 GitHub 一键升级；「检查依赖」体检内置 ffmpeg 及其它依赖，并可从 GitHub 升级内置 ffmpeg（8.x 起带 NVENC API 13.1 门槛，驱动过旧时自动拦截）
 - **主题设置**：跟随系统 / 浅色模式 / 深色模式
+- **用户分级**：默认（小白）/ 高手 / 程序员三档，按级别显示不同复杂度的选项
 
 ## 技术栈
 
@@ -77,7 +78,7 @@ unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART                     卸载
 
 安装包默认**内置 jellyfin-ffmpeg 便携版**（解压至 `{app}\ffmpeg\`），开箱即用。程序按以下优先级解析生效路径：
 
-1. **内置**：安装目录下 `ffmpeg\ffmpeg.exe`（默认，可经「设置 → 检查更新」升级）
+1. **内置**：安装目录下 `ffmpeg\ffmpeg.exe`（默认，可经「设置 → 检查依赖」升级）
 2. **手动配置**：设置页手动指定的路径
 3. **PATH**：系统环境变量中的 ffmpeg
 

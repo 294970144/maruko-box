@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
 using MarukoBox.Models;
+using MarukoBox.Services;
 
 namespace MarukoBox.Converters;
 
@@ -127,6 +128,30 @@ public sealed class MuxKindToBrush : IValueConverter
         }
 
         return new SolidColorBrush(Colors.Gray);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
+/// 按用户级别控制控件可见性：当前级别 ≥ ConverterParameter 指定的最低级别时显示。
+/// value 绑定当前 <see cref="UserLevel"/>（枚举或字符串代码均可）；
+/// parameter 为所需最低级别（Default / Expert / Developer，大小写不敏感）。
+/// 例：ConverterParameter='Expert' 表示高手及以上可见，默认（小白）级别隐藏。
+/// </summary>
+public sealed class UserLevelToVisibility : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var current = value switch
+        {
+            UserLevel level => level,
+            string s => UserLevels.Parse(s),
+            _ => UserLevel.Default
+        };
+        var required = UserLevels.Parse(parameter as string);
+        return current >= required ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)

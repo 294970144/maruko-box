@@ -112,8 +112,10 @@ public class GpuDetectionService : IGpuDetectionService
     }
 
     /// <summary>
-    /// 从驱动主版本号推断 NVENC API 版本。
-    /// 依据实测：驱动 610.62 → NVENC API 13.1；驱动 591.86 → NVENC API 13.0。
+    /// 从驱动主版本号推断该驱动支持的 NVENC API 上限。
+    /// 依据 NVIDIA Video Codec SDK 各版本官方系统要求（Windows 最低驱动），
+    /// 与 ffmpeg nvenc.c 的 nvenc_print_driver_requirement 对照表一致：
+    /// SDK 13.1 → 驱动 610；13.0 → 570；12.2 → 560；12.1 → 530；12.0 → 520。
     /// </summary>
     private static string InferNvencApiVersion(string driverVersion)
     {
@@ -131,9 +133,10 @@ public class GpuDetectionService : IGpuDetectionService
         return major switch
         {
             >= 610 => "13.1",
-            >= 590 => "13.0",
-            >= 550 => "12.2",
+            >= 570 => "13.0",
+            >= 560 => "12.2",
             >= 530 => "12.1",
+            >= 520 => "12.0",
             _ => "≤12.0"
         };
     }

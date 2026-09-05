@@ -15,6 +15,7 @@
         <conv:BoolToVisibility x:Key="BoolToVisibility" />
         <conv:InvertBool x:Key="InvertBool" />
         <conv:EmptyToCollapsed x:Key="EmptyToCollapsed" />
+        <conv:UserLevelToVisibility x:Key="UserLevelToVisibility" />
     </Page.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -69,32 +70,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- 更新渠道 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <FontIcon Grid.Column="0" Glyph="&#xE774;" FontSize="24"
-                              VerticalAlignment="Center" />
-
-                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="更新渠道" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock Text="内置 ffmpeg 的下载来源（保存配置后生效）"
-                                   Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
-                    </StackPanel>
-
-                    <ComboBox Grid.Column="2" MinWidth="150" VerticalAlignment="Center"
-                              ItemsSource="{x:Bind ViewModel.UpdateChannelOptions, Mode=OneWay}"
-                              SelectedItem="{x:Bind ViewModel.SelectedUpdateChannel, Mode=TwoWay}" />
-                </Grid>
-            </Border>
-
             <!-- 硬件检测状态条 -->
             <InfoBar
                 Title="GPU 与 ffmpeg 检测"
@@ -117,6 +92,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -146,6 +122,9 @@
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="cuda 硬件解码" Opacity="0.8" />
                         <TextBlock Grid.Row="5" Grid.Column="1" Text="-hwaccel cuda" />
                         <FontIcon Grid.Row="5" Grid.Column="2" Glyph="{x:Bind ViewModel.GpuInfo.HasCudaDecode, Mode=OneWay, Converter={StaticResource BoolToGlyph}}" />
+
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="内置 ffmpeg" Opacity="0.8" />
+                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{x:Bind ViewModel.BundledVersionText, Mode=OneWay}" />
                     </Grid>
 
                     <Button Content="重新检测" Command="{x:Bind ViewModel.DetectCommand, Mode=OneWay}"
@@ -155,10 +134,11 @@
                 </StackPanel>
             </Border>
 
-            <!-- ffmpeg 路径 -->
+            <!-- ffmpeg 路径（高手及以上；默认级别直接使用内置 ffmpeg，无需配置） -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                 <StackPanel Spacing="10">
                     <TextBlock Text="ffmpeg.exe 路径" Style="{StaticResource BodyStrongTextBlockStyle}" />
                     <Grid ColumnSpacing="8">
@@ -188,7 +168,8 @@
                                   HorizontalAlignment="Stretch" />
                     </StackPanel>
 
-                    <StackPanel Spacing="6">
+                    <StackPanel Spacing="6"
+                                Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                         <TextBlock Text="多 GPU 设备序号（0 = 自动）" Opacity="0.8" />
                         <NumberBox Value="{x:Bind ViewModel.GpuDevice, Mode=TwoWay}"
                                    Minimum="0" Maximum="3" SmallChange="1" SpinButtonPlacementMode="Compact"
@@ -220,6 +201,32 @@
                     <ComboBox Grid.Column="2" MinWidth="150" VerticalAlignment="Center"
                               ItemsSource="{x:Bind ViewModel.ThemeOptions, Mode=OneWay}"
                               SelectedItem="{x:Bind ViewModel.Theme, Mode=TwoWay}" />
+                </Grid>
+            </Border>
+
+            <!-- 用户级别（切换后重启生效） -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon Grid.Column="0" Glyph="&#xE716;" FontSize="24"
+                              VerticalAlignment="Center" />
+
+                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="用户级别" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="控制功能显示的详细程度：默认只显示常用功能，高手显示进阶参数，程序员显示全部。切换后需重启应用生效"
+                                   Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ComboBox Grid.Column="2" MinWidth="150" VerticalAlignment="Center"
+                              ItemsSource="{x:Bind ViewModel.UserLevelOptions, Mode=OneWay}"
+                              SelectedItem="{x:Bind ViewModel.SelectedUserLevel, Mode=TwoWay}" />
                 </Grid>
             </Border>
 

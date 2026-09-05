@@ -14,6 +14,7 @@
         <conv:BoolToVisibility x:Key="BoolToVisibility" />
         <conv:InvertBool x:Key="InvertBool" />
         <conv:InvertBoolToVisibility x:Key="InvertBoolToVisibility" />
+        <conv:UserLevelToVisibility x:Key="UserLevelToVisibility" />
     </Page.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -50,14 +51,17 @@
                                       SelectedValue="{x:Bind ViewModel.SelectedBitrate, Mode=TwoWay}"
                                       HorizontalAlignment="Stretch" />
                         </StackPanel>
-                        <StackPanel Grid.Column="2" Spacing="6">
+                        <!-- 声道/采样率（高手及以上） -->
+                        <StackPanel Grid.Column="2" Spacing="6"
+                                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                             <TextBlock Text="声道" Opacity="0.8" />
                             <ComboBox ItemsSource="{x:Bind ViewModel.ChannelOptions, Mode=OneWay}"
                                       DisplayMemberPath="Name" SelectedValuePath="Value"
                                       SelectedValue="{x:Bind ViewModel.SelectedChannels, Mode=TwoWay}"
                                       HorizontalAlignment="Stretch" />
                         </StackPanel>
-                        <StackPanel Grid.Column="3" Spacing="6">
+                        <StackPanel Grid.Column="3" Spacing="6"
+                                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                             <TextBlock Text="采样率" Opacity="0.8" />
                             <ComboBox ItemsSource="{x:Bind ViewModel.SampleRateOptions, Mode=OneWay}"
                                       DisplayMemberPath="Name" SelectedValuePath="Value"

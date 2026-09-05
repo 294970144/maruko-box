@@ -14,7 +14,7 @@
 #endif
 
 #define MyAppName "小丸工具箱 2026"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "MarukoBox"
 #define MyAppURL "https://github.com/"
 #define MyAppExeName "MarukoBox.exe"
@@ -23,6 +23,8 @@
 AppId={{9F3E1C2A-4B7D-4E5F-8C2A-1B3D4E5F6A7B}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+; 文件属性里的「文件版本」：默认 0.0.0.0，必须显式指定（产品版本取 AppVersion）
+VersionInfoVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}

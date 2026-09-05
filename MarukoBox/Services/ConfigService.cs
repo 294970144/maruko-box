@@ -16,6 +16,58 @@ public interface IConfigService
 }
 
 /// <summary>
+/// 用户级别：控制界面控件显示的详细程度。
+/// 存储于 <see cref="AppConfig.UserLevel"/>（字符串代码），界面显示用中文。
+/// </summary>
+public enum UserLevel
+{
+    /// <summary>默认（小白）：只显示最常用功能。</summary>
+    Default = 0,
+
+    /// <summary>高手：在默认基础上显示进阶编码参数。</summary>
+    Expert = 1,
+
+    /// <summary>程序员：显示全部功能（含自定义 ffmpeg 参数），即完整界面。</summary>
+    Developer = 2
+}
+
+/// <summary>UserLevel 的解析与显示辅助。</summary>
+public static class UserLevels
+{
+    /// <summary>配置代码（default/expert/developer，大小写不敏感）→ 枚举；无效值回落 Default。</summary>
+    public static UserLevel Parse(string? code) => code?.Trim().ToLowerInvariant() switch
+    {
+        "expert" => UserLevel.Expert,
+        "developer" => UserLevel.Developer,
+        _ => UserLevel.Default
+    };
+
+    /// <summary>枚举 → 配置存储代码。</summary>
+    public static string ToCode(UserLevel level) => level switch
+    {
+        UserLevel.Expert => "expert",
+        UserLevel.Developer => "developer",
+        _ => "default"
+    };
+
+    /// <summary>枚举 → 设置页下拉的中文显示名。</summary>
+    public static string ToDisplay(UserLevel level) => level switch
+    {
+        UserLevel.Expert => "高手",
+        UserLevel.Developer => "程序员",
+        _ => "默认"
+    };
+
+    /// <summary>设置页中文显示名 → 配置代码。</summary>
+    public static string DisplayToCode(string display) => display switch
+    {
+        "高手" => "expert",
+        "程序员" => "developer",
+        _ => "default"
+    };
+}
+
+/// <summary>
 /// 跨会话保留的用户设置。
 /// 字段与设置页控件一一对应。
 /// </summary>
@@ -39,8 +91,9 @@ public class AppConfig
     /// <summary>多 GPU 时使用的设备序号（0 = 自动/第一张）。</summary>
     public int GpuDevice { get; set; }
 
-    /// <summary>内置 ffmpeg 的更新渠道：mirror（国内镜像）/ github。</summary>
-    public string UpdateChannel { get; set; } = "mirror";
+    /// <summary>用户级别：default（默认/小白）/ expert（高手）/ developer（程序员）。
+    /// 控制各页面控件显示的详细程度，切换后重启生效。</summary>
+    public string UserLevel { get; set; } = "default";
 }
 
 /// <inheritdoc cref="IConfigService"/>

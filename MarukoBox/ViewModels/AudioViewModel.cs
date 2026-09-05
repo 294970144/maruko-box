@@ -25,6 +25,9 @@ public partial class AudioViewModel : ObservableObject
     /// <summary>队列是否非空，供 UI 显隐列表使用（避免把 int 误喂给 bool 转换器）。</summary>
     public bool HasQueue => Queue.Count > 0;
 
+    /// <summary>当前用户级别（控制界面控件显示范围；重启生效）。</summary>
+    public UserLevel UserLevel { get; } = UserLevels.Parse(AppServices.Config.Load().UserLevel);
+
     public AudioViewModel()
     {
         Queue.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasQueue));
