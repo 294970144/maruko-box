@@ -17,7 +17,7 @@
 | UI | WinUI 3 (Windows App SDK) |
 | 运行时 | .NET 10 (net10.0-windows) |
 | 部署 | unpackaged，`WindowsPackageType=None`，自包含 |
-| 安装器 | 两条可选路线：Native AOT 自解压 / Inno Setup 6 |
+| 安装器 | Inno Setup 6 |
 | 核心引擎 | ffmpeg（运行时依赖，见下文） |
 
 ## 仓库结构
@@ -25,56 +25,32 @@
 ```
 maruko-box/
 ├── MarukoBox/          主程序源码 (WinUI3)
-├── MarukoBoxSetup/     AOT 自解压安装器源码 + 一键构建脚本
-├── Installer-Inno/     Inno Setup 参数化脚本三件套
-├── Harness/            安装/卸载冒烟测试辅助工具
+├── Installer-Inno/     Inno Setup 参数化脚本三件套（一键构建）
+├── Harness/            开发调试脚手架（服务层冒烟测试，含无 UI 环境用的 App 桩）
 └── dist/               [gitignore] 构建产物（安装包 exe），可一键重建
 ```
 
-> `dist/` 不入库（单文件超过 GitHub 100MB 限制）。安装包通过下方构建脚本从源码重新生成。
+> `dist/` 不入库（安装包是二进制大文件，走 GitHub Release 分发）。安装包可用下方构建脚本从源码重新生成。
 
 ## 环境要求（仅构建时需要）
 
 - Windows 10 / 11 (x64)
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- **Visual Studio「使用 C++ 的桌面开发」工作负载**（AOT 路线需要 `link.exe`；纯 Inno 路线可省略）
-- [Inno Setup 6](https://jrsoftware.org/isinfo.php)（Inno 路线需要 `ISCC.exe`）
+- [Inno Setup 6](https://jrsoftware.org/isinfo.php)（需要 `ISCC.exe`）
 - PowerShell 7（`pwsh`）
-- Python 3（AOT 路线 `append_payload.py`，仅用标准库）
 
 ## 构建安装包
 
-两条路线均提供**一键构建脚本**，中间产物默认落到 `%TEMP%` 并在成功后自动清理。
-
-### 路线 A：Native AOT 自解压安装器（约 105 MB）
-
-```powershell
-pwsh -File MarukoBoxSetup\build-installer.ps1
-# 产物：dist\MarukoBoxSetup_1.0.0.exe
-```
-
-流程：`dotnet publish` 主程序 → 压缩为 payload.zip → Native AOT 编译安装器 stub → 将 payload 追加到 stub 末尾。安装时 stub 自解压到当前用户程序目录。
-
-### 路线 B：Inno Setup 安装包（约 70 MB）
+提供**一键构建脚本**，中间产物默认落到 `%TEMP%` 并在成功后自动清理。
 
 ```powershell
 pwsh -File Installer-Inno\build-installer.ps1
-# 产物：dist\MarukoBoxSetup-Inno_1.0.0.exe
+# 产物：dist\MarukoBoxSetup-Inno_1.0.0.exe（约 70 MB）
 ```
 
-流程：`dotnet publish` 主程序 → `ISCC.exe` 编译 `.iss` 生成安装包（含中文向导、开始菜单快捷方式、卸载注册）。
+流程：`dotnet publish` 主程序（自包含 unpackaged） → `ISCC.exe` 编译 `.iss` 生成安装包（含中文向导、开始菜单快捷方式、卸载注册）。
 
 ## 安装与卸载
-
-### AOT 路线
-
-```text
-MarukoBoxSetup_1.0.0.exe /silent           安装（静默）
-MarukoBoxSetup_1.0.0.exe /uninstall /silent 卸载（静默，三清：目录+快捷方式+注册表）
-MarukoBoxSetup_1.0.0.exe /?                 查看帮助
-```
-
-### Inno 路线
 
 ```text
 MarukoBoxSetup-Inno_1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART   安装
