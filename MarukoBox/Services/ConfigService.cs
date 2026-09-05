@@ -109,6 +109,7 @@ public sealed class ConfigService : IConfigService
 
         // 自动纠偏：内置优先。配置路径失效、指向旧开发路径或内置可用时，
         // 统一重解析出实际生效路径，全应用所有页面无需各自判断。
+        RecoverBundledBackup();
         config.FfmpegPath = ResolveFfmpegPath(config.FfmpegPath);
         return config;
     }
@@ -135,6 +136,38 @@ public sealed class ConfigService : IConfigService
         {
             FfmpegPath = ResolveFfmpegPath()
         };
+    }
+
+    /// <summary>
+    /// 更新中断的自愈：UpdateService 替换内置 ffmpeg 时采用「ffmpeg\ → ffmpeg.old → 移入新版」
+    /// 流程，若在两步 move 之间被中断，此处按状态恢复或清理备份，保证内置始终可用。
+    /// </summary>
+    private static void RecoverBundledBackup()
+    {
+        try
+        {
+            var current = Path.Combine(AppContext.BaseDirectory, "ffmpeg");
+            var backup = current + ".old";
+            if (!Directory.Exists(backup))
+            {
+                return;
+            }
+
+            if (!File.Exists(BundledFfmpegPath))
+            {
+                // 新版未移入：恢复备份的旧版
+                Directory.Move(backup, current);
+            }
+            else
+            {
+                // 新版已就位：备份是残留，清掉
+                Directory.Delete(backup, recursive: true);
+            }
+        }
+        catch
+        {
+            // 自愈失败不致命，保持现状
+        }
     }
 
     /// <summary>探测 ffmpeg.exe 的默认位置：内置优先，其次 PATH。</summary>

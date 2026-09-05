@@ -252,7 +252,10 @@ public sealed partial class UpdateService : IUpdateService
         IProgress<double>? progress = null, CancellationToken ct = default)
     {
         var tempZip = Path.Combine(Path.GetTempPath(), $"MarukoBox_ffmpeg_{Guid.NewGuid():N}.zip");
-        var tempExtract = Path.Combine(Path.GetTempPath(), $"MarukoBox_ffmpeg_{Guid.NewGuid():N}");
+
+        // 解压目录必须与应用目录同卷：Directory.Move 只支持同卷原子 rename，
+        // 跨卷（如 Temp 在 C:、应用装在 D:/E:）会抛 IOException，导致替换失败甚至旧版丢失。
+        var tempExtract = Path.Combine(AppContext.BaseDirectory, $".ffmpeg_extract_{Guid.NewGuid():N}");
 
         try
         {
@@ -294,21 +297,31 @@ public sealed partial class UpdateService : IUpdateService
                 throw new InvalidOperationException("下载的压缩包中没有 ffmpeg.exe，已放弃安装");
             }
 
-            // 4) 整目录替换：先删旧的 ffmpeg\，再移入新的
-            //    ffmpeg.exe 被占用（如正在编码）时这里会失败，给出可操作的提示。
+            // 4) 整目录替换（中断安全）：先把旧目录改名让位（同卷 rename，近乎原子），
+            //    再移入新目录，最后删备份。任何一步被中断（进程崩溃/断电），
+            //    ffmpeg\ 始终保留一个可用版本；失败原因通常是文件被占用（编码中）。
             try
             {
                 if (Directory.Exists(BundledDir))
                 {
-                    Directory.Delete(BundledDir, recursive: true);
+                    var backup = BundledDir + ".old";
+                    if (Directory.Exists(backup))
+                    {
+                        Directory.Delete(backup, recursive: true);
+                    }
+                    Directory.Move(BundledDir, backup);
+                    Directory.Move(tempExtract, BundledDir);
+                    Directory.Delete(backup, recursive: true);
+                }
+                else
+                {
+                    Directory.Move(tempExtract, BundledDir);
                 }
             }
             catch (Exception ex)
             {
                 throw new IOException("无法替换内置 ffmpeg：文件可能正被占用，请等待当前任务完成或关闭应用后重试。", ex);
             }
-
-            Directory.Move(tempExtract, BundledDir);
 
             // 5) 写入版本标记
             await File.WriteAllTextAsync(

@@ -16,6 +16,7 @@
     <Compile Include="..\MarukoBox\Services\FfmpegService.cs" />
     <Compile Include="..\MarukoBox\Services\GpuDetectionService.cs" />
     <Compile Include="..\MarukoBox\Services\ConfigService.cs" />
+    <Compile Include="..\MarukoBox\Services\UpdateService.cs" />
     <Compile Include="..\MarukoBox\Models\EncoderType.cs" />
     <Compile Include="..\MarukoBox\Models\GpuInfo.cs" />
     <Compile Include="..\MarukoBox\Models\EncodeSettings.cs" />
