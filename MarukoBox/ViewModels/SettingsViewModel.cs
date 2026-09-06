@@ -50,6 +50,12 @@ public partial class SettingsViewModel : ObservableObject
         "普通", "高级", "专家"
     };
 
+    /// <summary>软件更新源下拉选项（GitHub 主源 / Gitee 镜像）。</summary>
+    public ObservableCollection<string> UpdateSourceOptions { get; } = new()
+    {
+        "GitHub", "Gitee 镜像"
+    };
+
     /// <summary>
     /// 「程序员」专列的 ffmpeg 版本列表（来自 GitHub releases 全量）。
     /// 仅当用户级别 = 专家时显示；点过「检查依赖」或单独的「刷新版本列表」后填充。
@@ -123,6 +129,10 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial bool RememberLastSession { get; set; } = true;
 
+    /// <summary>当前选中的软件更新源（中文显示名；配置存储代码）。</summary>
+    [ObservableProperty]
+    public partial string SelectedUpdateSource { get; set; } = "GitHub";
+
     public SettingsViewModel()
     {
         var config = _config.Load();
@@ -132,6 +142,7 @@ public partial class SettingsViewModel : ObservableObject
         GpuDevice = config.GpuDevice;
         RememberLastSession = config.RememberLastSession;
         SelectedUserLevel = UserLevels.ToDisplay(UserLevels.Parse(config.UserLevel));
+        SelectedUpdateSource = UpdateSourceCodeToDisplay(config.UpdateSource);
 
         // 记录"未保存前"的实际值，Save() 比对时使用——
         // 避免 UI 控件绑定初期就把原值覆写成新值，导致重启判定永远为"未变"。
@@ -255,8 +266,9 @@ public partial class SettingsViewModel : ObservableObject
             OutputDirectory = OutputDirectory,
             GpuDevice = GpuDevice,
             UserLevel = UserLevels.DisplayToCode(SelectedUserLevel),
-            RememberLastSession = RememberLastSession
-        };
+                RememberLastSession = RememberLastSession,
+                UpdateSource = UpdateSourceDisplayToCode(SelectedUpdateSource)
+            };
         _config.Save(config);
 
         if (themeChanged || levelChanged)
@@ -325,10 +337,24 @@ public partial class SettingsViewModel : ObservableObject
         App.Current.Exit();
     }
 
-    // ---------- 检查更新（软件自身，仅 GitHub） ----------
+    // ---------- 更新源显示名 <-> 配置代码 ----------
+
+    private static string UpdateSourceCodeToDisplay(string code) => code?.Trim().ToLowerInvariant() switch
+    {
+        "gitee" => "Gitee 镜像",
+        _ => "GitHub"
+    };
+
+    private static string UpdateSourceDisplayToCode(string display) => display switch
+    {
+        "Gitee 镜像" => "gitee",
+        _ => "github"
+    };
+
+    // ---------- 检查更新（软件自身，支持 GitHub / Gitee 镜像） ----------
 
     /// <summary>
-    /// 检查 MarukoBox 软件更新：查询 GitHub 最新 Release 与当前版本比较，
+    /// 检查 MarukoBox 软件更新：按选定的更新源查询最新 Release 与当前版本比较，
     /// 有新版时弹窗确认并下载安装包，完成后启动安装程序并退出应用。
     /// 不检查 ffmpeg 依赖——那归「检查依赖」。
     /// </summary>
@@ -346,7 +372,8 @@ public partial class SettingsViewModel : ObservableObject
         UpdateStatusMessage = "正在检查软件更新…";
         try
         {
-            var latest = await _update.GetLatestAppReleaseAsync();
+            var source = SelectedUpdateSource == "Gitee 镜像" ? UpdateSource.Gitee : UpdateSource.GitHub;
+            var latest = await _update.GetLatestAppReleaseAsync(source);
             var current = _update.GetAppVersion();
 
             // 版本级比较（容忍 v 前缀差异），而非字符串相等

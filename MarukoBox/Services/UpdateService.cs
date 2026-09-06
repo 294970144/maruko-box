@@ -8,6 +8,16 @@ namespace MarukoBox.Services;
 /// <summary>软件自身（MarukoBox）在 GitHub 上的最新 Release 信息。</summary>
 public record AppReleaseInfo(string Tag, string Version, string DownloadUrl);
 
+/// <summary>软件自身更新源（MarukoBox 仓库镜像）。GitHub 为主源，Gitee 为国内镜像。</summary>
+public enum UpdateSource
+{
+    /// <summary>GitHub Releases（默认，海外，速度视网络）。</summary>
+    GitHub,
+
+    /// <summary>Gitee 镜像（国内访问更快；匿名只读公开仓库）。</summary>
+    Gitee
+}
+
 /// <summary>
 /// 从远端 jellyfin-ffmpeg release 拉到的完整信息（含资产、时间、是否 prerelease）。
 /// 用于「程序员」专列版本列表展示与按驱动兼容性过滤。
@@ -68,8 +78,8 @@ public interface IUpdateService
     /// </summary>
     FfmpegUpdateOffer ShouldOfferFfmpegUpdate(GpuInfo gpu, string targetTag);
 
-    /// <summary>从 GitHub 查询 MarukoBox 自身最新 Release；查询失败抛出异常。</summary>
-    Task<AppReleaseInfo> GetLatestAppReleaseAsync(CancellationToken ct = default);
+    /// <summary>查询 MarukoBox 自身最新 Release（按 source 选 GitHub 或 Gitee 镜像）；查询失败抛出异常。</summary>
+    Task<AppReleaseInfo> GetLatestAppReleaseAsync(UpdateSource source = UpdateSource.GitHub, CancellationToken ct = default);
 
     /// <summary>下载并安装新版 ffmpeg 到应用目录的 ffmpeg\ 下（整目录替换，写入 VERSION 标记）。</summary>
     Task DownloadAndInstallAsync(string downloadUrl, string versionTag,
@@ -86,9 +96,13 @@ public sealed partial class UpdateService : IUpdateService
     private static readonly string BundledDir =
         Path.Combine(AppContext.BaseDirectory, "ffmpeg");
 
-    /// <summary>MarukoBox 仓库的 GitHub Releases API。</summary>
-    private const string AppRepoLatestApi =
+    /// <summary>MarukoBox 仓库的 GitHub Releases 最新版 API。</summary>
+    private const string AppRepoLatestApiGithub =
         "https://api.github.com/repos/294970144/maruko-box/releases/latest";
+
+    /// <summary>MarukoBox 仓库的 Gitee 镜像最新版 API（公开仓库，匿名只读）。</summary>
+    private const string AppRepoLatestApiGitee =
+        "https://gitee.com/api/v5/repos/zhang-lin701442/maruko-box/releases/latest";
 
     private readonly HttpClient _http = new()
     {
@@ -241,9 +255,10 @@ public sealed partial class UpdateService : IUpdateService
     }
 
     /// <inheritdoc/>
-    public async Task<AppReleaseInfo> GetLatestAppReleaseAsync(CancellationToken ct = default)
+    public async Task<AppReleaseInfo> GetLatestAppReleaseAsync(UpdateSource source = UpdateSource.GitHub, CancellationToken ct = default)
     {
-        using var doc = await GetReleaseJsonAsync(AppRepoLatestApi, ct).ConfigureAwait(false);
+        var api = source == UpdateSource.Gitee ? AppRepoLatestApiGitee : AppRepoLatestApiGithub;
+        using var doc = await GetReleaseJsonAsync(api, ct).ConfigureAwait(false);
 
         // tag 形如 "v1.2.0" → 版本 "1.2.0"
         var rawTag = doc.RootElement.GetProperty("tag_name").GetString() ?? string.Empty;

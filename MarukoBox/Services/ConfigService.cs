@@ -109,6 +109,12 @@ public class AppConfig
     /// 关闭时每次启动都用默认参数。
     /// </summary>
     public bool RememberLastSession { get; set; } = true;
+
+    /// <summary>
+    /// 软件自身更新源：github（默认，海外）/ gitee（Gitee 镜像，国内更快）。
+    /// 控制「检查更新」查询哪个站点；即时生效，无需重启。
+    /// </summary>
+    public string UpdateSource { get; set; } = "github";
 }
 
 /// <inheritdoc cref="IConfigService"/>

@@ -18,7 +18,9 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
-        AppWindow.SetIcon("Assets/AppIcon.ico");
+        // 用绝对路径（BaseDirectory 即 exe 所在目录），避免从开始菜单快捷方式启动时
+        // 当前工作目录(CWD)≠exe 目录导致相对路径 "Assets/AppIcon.ico" 解析失败、图标静默失效。
+        AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
     }
 
     /// <summary>

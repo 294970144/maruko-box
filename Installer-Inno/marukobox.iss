@@ -38,6 +38,8 @@ DefaultDirName={localappdata}\Programs\MarukoBox
 DefaultGroupName={#MyAppName}
 OutputDir={#OutDir}
 OutputBaseFilename=MarukoBoxSetup-Inno_{#MyAppVersion}
+; 安装包自身的图标（资源管理器里显示）
+SetupIconFile={#PayloadDir}\Assets\AppIcon.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -62,8 +64,9 @@ Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 Type: filesandordirs; Name: "{app}"
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+; 显式指定图标文件，使开始菜单/桌面快捷方式显示 AppIcon（而非 exe 默认空白图标）
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Assets\AppIcon.ico"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Assets\AppIcon.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent

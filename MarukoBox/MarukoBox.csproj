@@ -8,6 +8,8 @@
     <Version>1.4.1</Version>
     <AssemblyTitle>MarukoBox 2026</AssemblyTitle>
     <Product>MarukoBox 2026</Product>
+    <!-- 让 exe 在资源管理器/任务栏(未运行时)显示图标：嵌入 RT_GROUP_ICON 到 PE -->
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Platforms>x86;x64;ARM64</Platforms>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant())</RuntimeIdentifier>
     <PublishProfile Condition="Exists('Properties\PublishProfiles\win-$(Platform).pubxml')">win-$(Platform).pubxml</PublishProfile>
@@ -90,6 +92,18 @@
     <Copy SourceFiles="$(OutputPath)$(AssemblyName).pri"
           DestinationFiles="$(PublishDir)resources.pri"
           Condition="Exists('$(OutputPath)$(AssemblyName).pri')"
+          SkipUnchangedFiles="true" />
+    <!--
+      AppIcon.ico 等 Assets 也是 Content，但 unpackaged 发布会把它们丢掉
+      （与 .xbf/.pri 同类问题），导致 AppWindow.SetIcon("Assets/AppIcon.ico")
+      与 TitleBar.IconSource 因文件缺失而静默失败 → 运行时/快捷方式全是无图标。
+      这里显式把整个 Assets 目录补拷到发布目录。
+    -->
+    <ItemGroup>
+      <_AssetsToPublish Include="$(OutputPath)Assets\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_AssetsToPublish)"
+          DestinationFiles="@(_AssetsToPublish->'$(PublishDir)Assets\%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
   </Target>
 
