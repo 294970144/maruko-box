@@ -353,7 +353,7 @@
                               DisplayMemberPath="Name" SelectedValuePath="Value"
                               SelectedValue="{x:Bind ViewModel.SelectedAfter, Mode=TwoWay}"
                               HorizontalAlignment="Stretch" />
-                    <TextBlock Text="注：关机/休眠需系统权限，目前仅记录设置。" FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
+                    <TextBlock Text="注：关机/休眠通过系统命令执行，执行前会弹出可取消的确认窗口（仅当全部编码成功时触发）。" FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
         </StackPanel>

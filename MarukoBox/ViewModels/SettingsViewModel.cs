@@ -486,7 +486,7 @@ public partial class SettingsViewModel : ObservableObject
                          || UpdateService.CompareVersions(local, rec.RecommendedTag!) < 0)
                 {
                     UpdateStatusMessage = sb.ToString().TrimEnd();
-                    var confirmed = await ConfirmFfmpegUpdateAsync(local, rec.RecommendedTag!);
+                    var confirmed = await ConfirmFfmpegUpdateAsync(local, rec.RecommendedTag!, rec.RecommendedSizeBytes);
                     if (confirmed)
                     {
                         await InstallFfmpegUpdateAsync(new FfmpegInstallTarget(rec.RecommendedTag!, rec.RecommendedDownloadUrl!));
@@ -525,7 +525,7 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>弹窗确认是否下载安装新版内置 ffmpeg。</summary>
-    private async Task<bool> ConfirmFfmpegUpdateAsync(string? localVersion, string newVersion)
+    private async Task<bool> ConfirmFfmpegUpdateAsync(string? localVersion, string newVersion, long? sizeBytes = null)
     {
         try
         {

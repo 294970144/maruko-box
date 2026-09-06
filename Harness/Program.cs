@@ -13,6 +13,43 @@ if (args.Any(a => a.Equals("recover", StringComparison.OrdinalIgnoreCase)))
     return RecoverSmokeAsync();
 }
 
+// ---------- B1 回归：质量四档必须真正落地为不同 CRF/CQP（纯逻辑，不依赖 ffmpeg） ----------
+// v1.4.0 该四档在 GPU 路径下完全失效（只写 Quality 但 RateControl 仍 vbr，四档输出体积相同）。
+// v1.4.1 由 QualityPresets.Apply 同步切换 cqp/crf 模式——这里直接断言两条路径的参数都正确。
+Console.WriteLine("=== B1 回归：质量四档落地校验（v1.4.1 修复）===");
+Console.Out.Flush();
+var presetFails = 0;
+foreach (var (preset, expect) in new (string Preset, int Expect)[]
+         {
+             (QualityPresets.Low, 30),
+             (QualityPresets.Medium, 26),
+             (QualityPresets.High, 22),
+             (QualityPresets.VeryHigh, 18),
+         })
+{
+    var s = new EncodeSettings();
+    QualityPresets.Apply(s, preset);
+    var crfOk = s.Crf == expect && s.Quality == expect;
+    var modeOk = s.RateControl == "cqp" && s.CpuMode == "crf";
+
+    // GPU（NVENC）路径：必须落到 -rc constqp -qp <expect>
+    var gpuArgs = new FfmpegService().BuildArguments(
+        s, EncoderType.NvencHevc, new GpuInfo { HasCudaScale = true });
+    var gpuOk = gpuArgs.Contains($"-rc constqp -qp {expect}", StringComparison.Ordinal);
+
+    // CPU（x264）路径：必须落到 -crf <expect>
+    var cpuArgs = new FfmpegService().BuildArguments(s, EncoderType.X264, new GpuInfo());
+    var cpuOk = cpuArgs.Contains($"-crf {expect}", StringComparison.Ordinal);
+
+    var pass = crfOk && modeOk && gpuOk && cpuOk;
+    if (!pass) presetFails++;
+    Console.WriteLine($"  {(pass ? "PASS" : "FAIL")} preset={preset} expect={expect} " +
+                      $"crf={s.Crf} qp={s.Quality} rc={s.RateControl} " +
+                      $"gpu={(gpuOk ? "ok" : "BAD")} cpu={(cpuOk ? "ok" : "BAD")}");
+}
+Console.WriteLine($"  B1 质量四档: {(presetFails == 0 ? "PASS" : $"FAIL ({presetFails} 项)")}");
+Console.Out.Flush();
+
 // 与主程序一致的路径解析链：内置 ffmpeg 优先，其次 PATH
 var ffmpeg = ConfigService.ResolveFfmpegPath();
 if (string.IsNullOrEmpty(ffmpeg))
@@ -53,9 +90,10 @@ var settings = new EncodeSettings
 var prog = new Progress<EncodeProgress>(p =>
     Console.WriteLine($"  progress: {p.Percent:F1}%  speed={p.Speed}x  fps={p.Fps}"));
 
+bool ok = false;
 try
 {
-    var ok = await new FfmpegService().EncodeAsync(settings, gpu, prog, CancellationToken.None);
+    ok = await new FfmpegService().EncodeAsync(settings, gpu, prog, CancellationToken.None);
     Console.WriteLine($"=== 编码结果: {(ok ? "成功" : "失败")} ===");
 }
 catch (Exception ex)
@@ -65,7 +103,7 @@ catch (Exception ex)
     Console.WriteLine(ex.StackTrace);
 }
 
-return 0;
+return presetFails == 0 && ok ? 0 : 1;
 
 // ---------- 更新链路冒烟：直接执行 UpdateService 产品代码 ----------
 static async Task<int> UpdateSmokeAsync()

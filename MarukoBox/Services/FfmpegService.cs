@@ -302,6 +302,22 @@ public class FfmpegService : IFfmpegService
         if (s.CpuMode == "custom")
         {
             var custom = (s.CustomArgs ?? string.Empty).Trim();
+
+            // v1.4.1 安全加固（S3）：自定义参数原样拼进命令行。虽然
+            // UseShellExecute=false 且走 ProcessStartInfo.Arguments 不会过 shell，
+            // 但仍应挡掉会破坏命令行结构 / 便于夹带其它命令的字符：
+            // 换行可注入新行、| & ; ` 是典型命令分隔符。
+            // 注：不禁用引号——-vf "scale=..." 这类合法 ffmpeg 写法需要引号，
+            // 改为要求引号成对出现（奇数个引号视为截断风险）。
+            if (custom.Length > 0)
+            {
+                if (Regex.IsMatch(custom, @"[\r\n|&;`]") || custom.Count(c => c == '"') % 2 != 0)
+                {
+                    throw new ArgumentException(
+                        "自定义参数不能包含换行、|、&、; 或反引号；引号必须成对出现。");
+                }
+            }
+
             return custom.Length > 0 ? custom + " " : string.Empty;
         }
 
@@ -443,8 +459,10 @@ public class FfmpegService : IFfmpegService
         }
 
         // 诊断：记录本次实际执行的命令，便于复现与排错。
+        // v1.4.1（S4）：命令行里含用户完整文件路径（可能暴露姓名、项目名），
+        // 这里把路径脱敏成 <path> 后再落盘，仅保留参数结构以便排错。
         App.LogInfo($"FfmpegPath = {ffmpegPath}");
-        App.LogInfo($"CMD = ffmpeg {arguments}");
+        App.LogInfo($"CMD = ffmpeg {RedactPaths(arguments)}");
 
         var psi = new ProcessStartInfo
         {
@@ -466,7 +484,10 @@ public class FfmpegService : IFfmpegService
             StatusMessage = "正在编码…"
         };
 
-        TimeSpan totalDuration = TimeSpan.Zero;
+        // v1.4.1：总时长由 stderr 线程写入、stdout 线程读取。原先是 TimeSpan 局部变量，
+        // 读写无内存屏障，理论上存在新值不可见的窗口（表现为进度百分比偶发停滞）。
+        // 改用 long + Volatile 读写，读取时再转 TimeSpan。
+        long durationTicks = 0;
 
         // ---------- stderr: 日志 + 总时长 ----------
         // 此回调运行在线程池线程，任何未捕获异常都应就地吞掉，避免终止进程。
@@ -481,12 +502,12 @@ public class FfmpegService : IFfmpegService
 
                 var line = e.Data;
 
-                if (totalDuration == TimeSpan.Zero)
+                if (Volatile.Read(ref durationTicks) == 0)
                 {
                     var dur = ParseDuration(line);
                     if (dur.HasValue)
                     {
-                        totalDuration = dur.Value;
+                        Volatile.Write(ref durationTicks, dur.Value.Ticks);
                     }
                 }
 
@@ -534,7 +555,7 @@ public class FfmpegService : IFfmpegService
                         continue;
                     }
 
-                    ParseProgressLine(line, current, totalDuration);
+                    ParseProgressLine(line, current, new TimeSpan(Volatile.Read(ref durationTicks)));
                     progress.Report(current);
                 }
             }
@@ -619,6 +640,14 @@ public class FfmpegService : IFfmpegService
             return result;
         }
 
+        // v1.4.1（B5）：取消时必须终止 ffmpeg 子进程。此前只 catch 了
+        // OperationCanceledException 就继续往下解析，若探测的是网络路径或损坏文件
+        // 导致 ffmpeg 挂起，进程会永久残留。
+        await using var registration = ct.Register(() =>
+        {
+            try { process.Kill(entireProcessTree: true); } catch { /* 忽略 */ }
+        });
+
         process.BeginErrorReadLine();
 
         // ffmpeg -i 未指定输出文件会以非零退出，这里仅读取 stderr 的流信息即可。
@@ -631,47 +660,9 @@ public class FfmpegService : IFfmpegService
             // 探测被取消，返回已解析的部分结果
         }
 
-        var text = stderr.ToString();
-        var regex = new Regex(
-            @"Stream #\d+:(\d+)(?:\[[^\]]*\])?(?:\(([^)]*)\))?:\s*(\w+):\s*(.*)",
-            RegexOptions.Compiled);
-
-        foreach (var line in text.Split('\n'))
-        {
-            var m = regex.Match(line);
-            if (!m.Success)
-            {
-                continue;
-            }
-
-            var idx = int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
-            var lang = m.Groups[2].Value.Trim();
-            var typeStr = m.Groups[3].Value.ToLowerInvariant();
-            var detail = m.Groups[4].Value.Trim();
-
-            var type = typeStr switch
-            {
-                "video" => StreamType.Video,
-                "audio" => StreamType.Audio,
-                "subtitle" => StreamType.Subtitle,
-                "data" => StreamType.Data,
-                "attachment" => StreamType.Attachment,
-                _ => StreamType.Unknown
-            };
-
-            var codec = detail.Split(' ', ',')[0].Trim();
-
-            result.Add(new MediaStreamInfo
-            {
-                Index = idx,
-                Type = type,
-                Codec = codec,
-                Language = lang,
-                Detail = detail
-            });
-        }
-
-        return result;
+        // v1.4.1（C1）：解析逻辑曾与 ProbeInfoAsync 逐行重复约 40 行，
+        // 现在统一到 ParseStreams，两处调用方各自决定如何装载结果。
+        return ParseStreams(stderr.ToString());
     }
 
     /// <inheritdoc/>
@@ -926,6 +917,12 @@ public class FfmpegService : IFfmpegService
             return info;
         }
 
+        // v1.4.1（B5）：同 ProbeStreamsAsync，取消时终止子进程。
+        await using var registration = ct.Register(() =>
+        {
+            try { process.Kill(entireProcessTree: true); } catch { /* 忽略 */ }
+        });
+
         process.BeginErrorReadLine();
 
         try
@@ -950,14 +947,34 @@ public class FfmpegService : IFfmpegService
             }
         }
 
-        // 流列表（复用与 ProbeStreamsAsync 相同的解析规则）
-        var regex = new Regex(
-            @"Stream #\d+:(\d+)(?:\[[^\]]*\])?(?:\(([^)]*)\))?:\s*(\w+):\s*(.*)",
-            RegexOptions.Compiled);
-
-        foreach (var line in text.Split('\n'))
+        // 流列表（与 ProbeStreamsAsync 共用同一套解析规则）
+        foreach (var stream in ParseStreams(text))
         {
-            var m = regex.Match(line);
+            info.Streams.Add(stream);
+        }
+
+        return info;
+    }
+
+    /// <summary>
+    /// 从 <c>ffmpeg -i</c> 的 stderr 中解析出媒体流列表。
+    /// 匹配形如 <c>Stream #0:1(chi): Audio: aac (LC) ...</c> 的行。
+    /// </summary>
+    private static readonly Regex StreamLineRegex = new(
+        @"Stream #\d+:(\d+)(?:\[[^\]]*\])?(?:\(([^)]*)\))?:\s*(\w+):\s*(.*)",
+        RegexOptions.Compiled);
+
+    private static List<MediaStreamInfo> ParseStreams(string ffmpegStderr)
+    {
+        var result = new List<MediaStreamInfo>();
+        if (string.IsNullOrEmpty(ffmpegStderr))
+        {
+            return result;
+        }
+
+        foreach (var line in ffmpegStderr.Split('\n'))
+        {
+            var m = StreamLineRegex.Match(line);
             if (!m.Success)
             {
                 continue;
@@ -980,7 +997,7 @@ public class FfmpegService : IFfmpegService
 
             var codec = detail.Split(' ', ',')[0].Trim();
 
-            info.Streams.Add(new MediaStreamInfo
+            result.Add(new MediaStreamInfo
             {
                 Index = idx,
                 Type = type,
@@ -990,7 +1007,7 @@ public class FfmpegService : IFfmpegService
             });
         }
 
-        return info;
+        return result;
     }
 
     /// <inheritdoc/>
@@ -1204,6 +1221,16 @@ public class FfmpegService : IFfmpegService
         var remain = totalDuration - current.Processed;
         current.Remaining = remain > TimeSpan.Zero ? remain : TimeSpan.Zero;
     }
+
+    /// <summary>
+    /// 把命令行中的文件系统路径替换为 <c>&lt;path&gt;</c>，避免用户目录结构落入日志。
+    /// 只处理「被引号包裹且含 / 或 \」的片段——这样 <c>-vf "scale=1280:720"</c>
+    /// 这类滤镜参数不会被误伤（它不含路径分隔符）。
+    /// </summary>
+    private static readonly Regex PathTokenRegex = new("\"[^\"]*[\\\\/][^\"]*\"", RegexOptions.Compiled);
+
+    private static string RedactPaths(string arguments) =>
+        PathTokenRegex.Replace(arguments, "\"<path>\"");
 
     /// <summary>
     /// 从 ffmpeg 输出行中解析总时长（"Duration: 00:02:14.38"）。

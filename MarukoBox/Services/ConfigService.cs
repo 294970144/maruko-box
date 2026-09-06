@@ -97,9 +97,6 @@ public class AppConfig
     /// <summary>默认输出目录。为空时输出到源文件同目录。</summary>
     public string OutputDirectory { get; set; } = string.Empty;
 
-    /// <summary>编码完成后的动作：none / shutdown / hibernate / exit。</summary>
-    public string AfterCompletion { get; set; } = "none";
-
     /// <summary>多 GPU 时使用的设备序号（0 = 自动/第一张）。</summary>
     public int GpuDevice { get; set; }
 
@@ -204,7 +201,14 @@ public sealed class ConfigService : IConfigService
 
     private static readonly string SessionPath = Path.Combine(ConfigDirectory, "session.json");
 
-    /// <summary>加载上次会话快照；文件不存在或解析失败返回 null（调用方用默认值）。</summary>
+    /// <summary>
+    /// 加载上次会话快照；文件不存在或解析失败返回 null（调用方用默认值）。
+    /// <para>
+    /// v1.4.1：SessionState 结构从「扁平字段」改为「嵌套 EncodeSettings」。
+    /// 这里识别旧格式（JSON 中没有 "Settings" 节点）并自动迁移，
+    /// 避免升级后用户「保持习惯」记住的参数被整体清空。
+    /// </para>
+    /// </summary>
     public static SessionState? LoadSession()
     {
         try
@@ -213,7 +217,15 @@ public sealed class ConfigService : IConfigService
             {
                 return null;
             }
+
             var json = File.ReadAllText(SessionPath);
+
+            if (!json.Contains("\"Settings\"", StringComparison.OrdinalIgnoreCase))
+            {
+                var legacy = JsonSerializer.Deserialize<SessionState.Legacy>(json);
+                return legacy?.ToSessionState();
+            }
+
             return JsonSerializer.Deserialize<SessionState>(json);
         }
         catch
@@ -308,26 +320,47 @@ public sealed class ConfigService : IConfigService
         }
 
         // 3) 在 PATH 中查找
+        // v1.4.1：原先启动 `where ffmpeg.exe` 子进程。而 Load() 会被 VM 的字段初始化器
+        // 与构造函数各调一次，启动阶段就起了好几个子进程；改为纯托管遍历 PATH，
+        // 零进程开销、无超时风险、也就不存在子进程被杀软拦截的问题。
+        return FindOnPath("ffmpeg.exe");
+    }
+
+    /// <summary>
+    /// 在 PATH 环境变量列出的目录中查找指定可执行文件（纯托管实现，不起子进程）。
+    /// 按 PATH 顺序返回第一个命中的绝对路径；未找到返回空字符串。
+    /// </summary>
+    private static string FindOnPath(string fileName)
+    {
         try
         {
-            var psi = new System.Diagnostics.ProcessStartInfo
+            var path = Environment.GetEnvironmentVariable("PATH");
+            if (string.IsNullOrWhiteSpace(path))
             {
-                FileName = "where",
-                Arguments = "ffmpeg.exe",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                CreateNoWindow = true
-            };
-            using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc is not null)
+                return string.Empty;
+            }
+
+            foreach (var rawDir in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
             {
-                var output = proc.StandardOutput.ReadToEnd();
-                proc.WaitForExit();
-                var firstLine = output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                    .FirstOrDefault()?.Trim();
-                if (!string.IsNullOrEmpty(firstLine) && File.Exists(firstLine))
+                var dir = rawDir.Trim().Trim('"');
+                if (dir.Length == 0)
                 {
-                    return firstLine;
+                    continue;
+                }
+
+                string candidate;
+                try
+                {
+                    candidate = Path.Combine(dir, fileName);
+                }
+                catch (ArgumentException)
+                {
+                    continue; // PATH 中含非法字符的目录，跳过
+                }
+
+                if (File.Exists(candidate))
+                {
+                    return candidate;
                 }
             }
         }

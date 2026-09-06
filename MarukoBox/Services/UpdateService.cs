@@ -29,7 +29,8 @@ public sealed record FfmpegRecommendation(
     bool Recommended,
     string? RecommendedTag = null,
     string? RecommendedDownloadUrl = null,
-    string? BlockReason = null);
+    string? BlockReason = null,
+    long RecommendedSizeBytes = 0);
 
 /// <summary>单条版本是否应被允许推送（NVENC API 门槛）。</summary>
 public sealed record FfmpegUpdateOffer(bool Offer, string? BlockReason = null);
@@ -95,6 +96,23 @@ public sealed partial class UpdateService : IUpdateService
         Timeout = TimeSpan.FromMinutes(10)
     };
 
+    /// <summary>
+    /// 软件安装包下载目录：用户专属的 <c>%LOCALAPPDATA%\MarukoBox\Updates\</c>。
+    /// <para>
+    /// v1.4.1 安全加固：此前落在 <c>%TEMP%</c>——该目录对同用户下的任何低完整性
+    /// 进程都可写，下载完成到执行之间存在 TOCTOU 窗口，本地木马可替换 exe 实现
+    /// 代码执行。LOCALAPPDATA 下本应用自建目录默认 ACL 仅当前用户可写。
+    /// </para>
+    /// </summary>
+    private static string UpdatesDirectory =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MarukoBox", "Updates");
+
+    /// <summary>版本号白名单：仅允许数字、字母与 . + - ，杜绝路径穿越字符。</summary>
+    private static readonly System.Text.RegularExpressions.Regex SafeVersionPattern =
+        new(@"^[0-9A-Za-z.+\-]{1,32}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     /// <summary>当前软件版本（程序集版本，如 "1.2.0"）；静态版便于非服务上下文调用。</summary>
     public static string GetAppVersionStatic() =>
         typeof(UpdateService).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
@@ -133,7 +151,7 @@ public sealed partial class UpdateService : IUpdateService
 
         return best is null
             ? new FfmpegRecommendation(false, BlockReason: firstBlock ?? "无可用的 ffmpeg 版本")
-            : new FfmpegRecommendation(true, best.Tag, best.AssetUrl);
+            : new FfmpegRecommendation(true, best.Tag, best.AssetUrl, null, best.AssetSizeBytes);
     }
 
     /// <summary>
@@ -281,9 +299,20 @@ public sealed partial class UpdateService : IUpdateService
             return new FfmpegUpdateOffer(true);
         }
 
-        // 未检测到 NVIDIA 驱动（无 N 卡或 nvidia-smi 不可用）：无从判定，按可推送处理
+        // 驱动版本未知：必须区分「本机没有 NVIDIA 硬件」与「有 N 卡但 nvidia-smi 不可用」。
+        // v1.4.1 修复：此前两者一律放行，后者（驱动异常 / nvidia-smi 不在 PATH / WSL 环境）
+        // 升级 8.x 后 NVENC 会静默失效且无任何提示。
         if (string.IsNullOrEmpty(gpu.DriverVersion) || gpu.DriverVersion == "未知")
         {
+            if (gpu.HasNvencHevc || gpu.HasNvencH264)
+            {
+                return new FfmpegUpdateOffer(false,
+                    "检测到本机有 NVENC 编码器，但未能读取 NVIDIA 驱动版本（nvidia-smi 不可用或不在 PATH）。"
+                    + $"无法确认是否满足驱动 ≥{requiredDriver}，暂不推送 ffmpeg 8.x；"
+                    + "请确认 nvidia-smi 可用后再检查更新，或以「专家」级从版本列表强制安装。");
+            }
+
+            // 确无 NVIDIA 硬件（AMD AMF / Intel QSV 无同类硬门槛）→ 放行
             return new FfmpegUpdateOffer(true);
         }
 
@@ -413,8 +442,22 @@ public sealed partial class UpdateService : IUpdateService
                         Directory.Delete(backup, recursive: true);
                     }
                     Directory.Move(BundledDir, backup);
+
+                    // 关键步骤：新版就位。只有这一步失败才算「安装失败」。
                     Directory.Move(tempExtract, BundledDir);
-                    Directory.Delete(backup, recursive: true);
+
+                    // v1.4.1 修复：旧备份的清理此前也在同一个 try 内，
+                    // 一旦被杀毒软件占用导致删除失败，就会抛「无法替换内置 ffmpeg」，
+                    // 而此时新版其实已经装好了——报错与真实状态矛盾。
+                    // 清理失败不影响结果，残留由 ConfigService.RecoverBundledBackup 自愈。
+                    try
+                    {
+                        Directory.Delete(backup, recursive: true);
+                    }
+                    catch
+                    {
+                        // 下次启动自愈，忽略
+                    }
                 }
                 else
                 {
@@ -445,9 +488,66 @@ public sealed partial class UpdateService : IUpdateService
     public async Task<string> DownloadAppInstallerAsync(string downloadUrl, string version,
         IProgress<double>? progress = null, CancellationToken ct = default)
     {
-        var dest = Path.Combine(Path.GetTempPath(), $"MarukoBoxSetup_{version}.exe");
+        // v1.4.1 安全加固（S2）：version 直接来自 GitHub 返回的 tag_name，
+        // 旧实现只剥掉 v 前缀就拼进文件名，tag 若为 "..\..\Startup\evil"
+        // 就能把文件写到任意位置。这里做白名单校验，不合法直接拒绝下载。
+        if (!SafeVersionPattern.IsMatch(version ?? string.Empty))
+        {
+            throw new InvalidOperationException(
+                $"Release 版本号 \"{version}\" 含非法字符，已中止更新。");
+        }
+
+        // v1.4.1 安全加固（S1）：落盘到用户专属目录，而非全局可写的 %TEMP%。
+        var dir = UpdatesDirectory;
+        Directory.CreateDirectory(dir);
+        var dest = Path.Combine(dir, $"MarukoBoxSetup_{version}.exe");
+
         await DownloadFileAsync(downloadUrl, dest, progress, ct).ConfigureAwait(false);
+
+        // 下载完成后的基本完整性检查：文件必须存在且非空，避免把 0 字节 / 半截文件当安装包执行。
+        var info = new FileInfo(dest);
+        if (!info.Exists || info.Length <= 0)
+        {
+            TryCleanup(dest);
+            throw new InvalidOperationException("安装包下载失败（文件为空），已中止更新。");
+        }
+
         return dest;
+    }
+
+    /// <summary>
+    /// 清理历史遗留安装包：删除 Updates 目录下除了刚下载的这个文件以外的旧安装包。
+    /// 由调用方在安装成功启动后调用，避免长期堆积几十 MB 的 exe。
+    /// </summary>
+    public static void CleanupOldInstallers(string? keepFile)
+    {
+        try
+        {
+            var dir = UpdatesDirectory;
+            if (!Directory.Exists(dir))
+            {
+                return;
+            }
+
+            var keep = string.IsNullOrEmpty(keepFile)
+                ? null
+                : Path.GetFullPath(keepFile);
+
+            foreach (var file in Directory.EnumerateFiles(dir, "MarukoBoxSetup_*.exe"))
+            {
+                if (keep is not null
+                    && string.Equals(Path.GetFullPath(file), keep, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                TryCleanup(file);
+            }
+        }
+        catch
+        {
+            // 清理失败不影响更新流程
+        }
     }
 
     /// <summary>流式下载文件到目标路径（带进度与取消支持）。</summary>

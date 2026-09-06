@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using MarukoBox.Helpers;
 using MarukoBox.Models;
 using MarukoBox.Services;
+using Microsoft.UI.Xaml.Controls;
 
 namespace MarukoBox.ViewModels;
 
@@ -51,22 +52,14 @@ public partial class VideoViewModel : ObservableObject
     /// <summary>
     /// 「普通」级专属的恒定质量四档。值映射到 CRF（CPU）/ CQP（GPU），
     /// 数值越低质量越高：低=30、中=26、高=22、非常高=18。
+    /// 映射与落地逻辑见 <see cref="QualityPresets"/>（独立模型，便于回归断言）。
     /// </summary>
     public ObservableCollection<OptionEntry> QualityPresetOptions { get; } = new()
     {
-        new() { Value = "low",      Name = "低（体积最小）" },
-        new() { Value = "medium",   Name = "中" },
-        new() { Value = "high",     Name = "高（推荐）" },
-        new() { Value = "veryhigh", Name = "非常高（体积最大）" }
-    };
-
-    /// <summary>质量档 → CRF/CQP 数值映射。</summary>
-    private static int QualityPresetToValue(string preset) => preset switch
-    {
-        "low" => 30,
-        "high" => 22,
-        "veryhigh" => 18,
-        _ => 26
+        new() { Value = QualityPresets.Low,      Name = "低（体积最小）" },
+        new() { Value = QualityPresets.Medium,   Name = "中" },
+        new() { Value = QualityPresets.High,     Name = "高（推荐）" },
+        new() { Value = QualityPresets.VeryHigh, Name = "非常高（体积最大）" }
     };
 
     public ObservableCollection<OptionEntry> ContainerOptions { get; } = new()
@@ -107,6 +100,15 @@ public partial class VideoViewModel : ObservableObject
         "medium", "slow", "slower", "veryslow", "placebo"
     };
 
+    /// <summary>
+    /// x264/x265 的 Tune 选项（v1.4.1 新增 UI：此前该参数硬编码为 animation，
+    /// 对真人实拍 / 胶片颗粒内容并不理想，且用户无从修改）。
+    /// </summary>
+    public ObservableCollection<string> CpuTuneOptions { get; } = new()
+    {
+        "animation", "film", "grain", "stillimage", "psnr", "ssd", "fastdecode", "zerolatency"
+    };
+
     public ObservableCollection<OptionEntry> AfterOptions { get; } = new()
     {
         new() { Value = "none", Name = "无操作" },
@@ -118,15 +120,19 @@ public partial class VideoViewModel : ObservableObject
     [ObservableProperty]
     public partial EncoderOption? SelectedEncoderOption { get; set; }
 
+    /// <summary>
+    /// GPU 码率控制。默认 cqp（恒定质量）——与 <see cref="QualityPresets"/> 的
+    /// 落地结果一致，避免「界面显示恒定质量、实际走 vbr 默认码率」的错位。
+    /// </summary>
     [ObservableProperty]
-    public partial string SelectedRateControl { get; set; } = "2pass";
+    public partial string SelectedRateControl { get; set; } = "cqp";
 
     [ObservableProperty]
     public partial string SelectedCpuMode { get; set; } = "crf";
 
     /// <summary>「普通」级质量档（low/medium/high/veryhigh）；变更即写入 CRF 与 CQP 两条路径。</summary>
     [ObservableProperty]
-    public partial string SelectedQualityPreset { get; set; } = "high";
+    public partial string SelectedQualityPreset { get; set; } = QualityPresets.Default;
 
     /// <summary>命令自定义模式的原始 ffmpeg 视频参数。</summary>
     [ObservableProperty]
@@ -153,6 +159,10 @@ public partial class VideoViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string SelectedCpuPreset { get; set; } = "medium";
+
+    /// <summary>x264/x265 的 Tune；与 Settings.CpuTune 双向同步。</summary>
+    [ObservableProperty]
+    public partial string SelectedCpuTune { get; set; } = "animation";
 
     [ObservableProperty]
     public partial string SelectedAfter { get; set; } = "none";
@@ -225,6 +235,12 @@ public partial class VideoViewModel : ObservableObject
                                 ?? EncoderOptions[0];
 
         SyncToSettings();
+
+        // 让默认质量档（「高」=22）真正落到 Settings：
+        // 属性初始化器直接写后端字段，不会触发 OnSelectedQualityPresetChanged，
+        // 因此这里显式 Apply 一次，保证「界面档位」与「实际参数」从一开始就是一致的。
+        QualityPresets.Apply(Settings, SelectedQualityPreset);
+
         KeepOriginalResolution = Settings.KeepOriginalResolution;
 
         // 全局默认输出目录作为「输出文件夹」的初始值；用户清空即回退到源文件同目录。
@@ -244,32 +260,68 @@ public partial class VideoViewModel : ObservableObject
 
     // ---------- 保持习惯：会话快照 ----------
 
-    /// <summary>把当前视频页全部参数捕获为可持久化快照。</summary>
-    public SessionState CaptureSession() => new()
+    /// <summary>
+    /// 把当前视频页全部参数捕获为可持久化快照。
+    /// <para>
+    /// v1.4.1 起直接序列化整个 <see cref="EncodeSettings"/>，而不是逐字段手工搬运——
+    /// 此前遗漏了 CpuTune / AqMode / PsyRd / KeyInt / BFrames 等十余个参与命令行构建的
+    /// 参数，一旦后续补上 UI 就会出现「部分参数不记忆」的缺口。
+    /// </para>
+    /// </summary>
+    public SessionState CaptureSession()
     {
-        Encoder = (SelectedEncoderOption?.Type ?? EncoderType.Auto).ToString(),
-        RateControl = SelectedRateControl,
-        CpuMode = SelectedCpuMode,
-        QualityPreset = SelectedQualityPreset,
-        Crf = Settings.Crf,
-        Quality = Settings.Quality,
-        BitrateKbps = Settings.BitrateKbps,
-        MaxBitrateKbps = Settings.MaxBitrateKbps,
-        BufferSizeKbps = Settings.BufferSizeKbps,
-        GpuPreset = Settings.GpuPreset,
-        GpuTune = SelectedGpuTune,
-        Profile = SelectedProfile,
-        CpuPreset = SelectedCpuPreset,
-        CustomArgs = CustomArgs,
-        KeepOriginalResolution = KeepOriginalResolution,
-        Width = Settings.Width,
-        Height = Settings.Height,
-        Container = SelectedContainer,
-        AudioMode = SelectedAudio,
-        SubtitleMode = SelectedSubtitle,
-        OutputDir = OutputDir,
-        AfterCompletion = SelectedAfter
-    };
+        SyncToSettings();
+
+        // InputPath / OutputPath 是编码时逐项写入的临时值，不应作为「习惯」被记忆。
+        var snapshot = new EncodeSettings
+        {
+            Encoder = Settings.Encoder,
+            GpuDevice = Settings.GpuDevice,
+            RateControl = Settings.RateControl,
+            BitrateKbps = Settings.BitrateKbps,
+            MaxBitrateKbps = Settings.MaxBitrateKbps,
+            BufferSizeKbps = Settings.BufferSizeKbps,
+            Quality = Settings.Quality,
+            GpuPreset = Settings.GpuPreset,
+            GpuTune = Settings.GpuTune,
+            Profile = Settings.Profile,
+            Multipass = Settings.Multipass,
+            SpatialAq = Settings.SpatialAq,
+            AqStrength = Settings.AqStrength,
+            RcLookahead = Settings.RcLookahead,
+            BFrames = Settings.BFrames,
+            RefFrames = Settings.RefFrames,
+            ForcedIdr = Settings.ForcedIdr,
+            CpuMode = Settings.CpuMode,
+            CustomArgs = Settings.CustomArgs,
+            Crf = Settings.Crf,
+            CpuPreset = Settings.CpuPreset,
+            CpuTune = Settings.CpuTune,
+            AqMode = Settings.AqMode,
+            CpuAqStrength = Settings.CpuAqStrength,
+            PsyRd = Settings.PsyRd,
+            KeyInt = Settings.KeyInt,
+            MinKeyInt = Settings.MinKeyInt,
+            StartFrame = Settings.StartFrame,
+            FrameCount = Settings.FrameCount,
+            Width = Settings.Width,
+            Height = Settings.Height,
+            KeepOriginalResolution = Settings.KeepOriginalResolution,
+            Container = Settings.Container,
+            AudioMode = Settings.AudioMode,
+            SubtitleMode = Settings.SubtitleMode
+            // 注：AfterCompletion（关机/休眠等一次性意图）刻意不写入快照，
+            // 否则「保持习惯」会把它记进 session.json；运行时由 Settings.AfterCompletion
+            // （SyncToSettings 从 SelectedAfter 同步）直接消费，无需经快照。
+        };
+
+        return new SessionState
+        {
+            Settings = snapshot,
+            QualityPreset = SelectedQualityPreset,
+            OutputDir = OutputDir
+        };
+    }
 
     /// <summary>恢复会话快照；null（无快照/解析失败）时保持默认值不动。</summary>
     private void RestoreSession(SessionState? s)
@@ -279,7 +331,12 @@ public partial class VideoViewModel : ObservableObject
             return;
         }
 
-        if (Enum.TryParse<EncoderType>(s.Encoder, out var enc))
+        // 顺序要点：先恢复 Selected*（它们会通过 partial 回调写回 Settings），
+        // 再逐个赋值 Settings 的其余字段——保证「最后一次写入」是快照里的真实值，
+        // 不会被 SelectedQualityPresetChanged 里的 QualityPresets.Apply 覆盖。
+        SelectedQualityPreset = s.QualityPreset;
+
+        if (Enum.TryParse<EncoderType>(s.Settings.Encoder.ToString(), out var enc))
         {
             var opt = EncoderOptions.FirstOrDefault(o => o.Type == enc);
             if (opt is not null)
@@ -287,27 +344,46 @@ public partial class VideoViewModel : ObservableObject
                 SelectedEncoderOption = opt;
             }
         }
-        SelectedRateControl = s.RateControl;
-        SelectedCpuMode = s.CpuMode;
-        SelectedQualityPreset = s.QualityPreset;
-        Settings.Crf = s.Crf;
-        Settings.Quality = s.Quality;
-        Settings.BitrateKbps = s.BitrateKbps;
-        Settings.MaxBitrateKbps = s.MaxBitrateKbps;
-        Settings.BufferSizeKbps = s.BufferSizeKbps;
-        Settings.GpuPreset = s.GpuPreset;
-        SelectedGpuTune = s.GpuTune;
-        SelectedProfile = s.Profile;
-        SelectedCpuPreset = s.CpuPreset;
-        CustomArgs = s.CustomArgs;
-        KeepOriginalResolution = s.KeepOriginalResolution;
-        Settings.Width = s.Width;
-        Settings.Height = s.Height;
-        SelectedContainer = s.Container;
-        SelectedAudio = s.AudioMode;
-        SelectedSubtitle = s.SubtitleMode;
+
+        SelectedRateControl = s.Settings.RateControl;
+        SelectedCpuMode = s.Settings.CpuMode;
+        SelectedGpuTune = s.Settings.GpuTune;
+        SelectedProfile = s.Settings.Profile;
+        SelectedCpuPreset = s.Settings.CpuPreset;
+        SelectedCpuTune = s.Settings.CpuTune;
+        CustomArgs = s.Settings.CustomArgs;
+        SelectedContainer = s.Settings.Container;
+        SelectedAudio = s.Settings.AudioMode;
+        SelectedSubtitle = s.Settings.SubtitleMode;
+
+        Settings.Crf = s.Settings.Crf;
+        Settings.Quality = s.Settings.Quality;
+        Settings.BitrateKbps = s.Settings.BitrateKbps;
+        Settings.MaxBitrateKbps = s.Settings.MaxBitrateKbps;
+        Settings.BufferSizeKbps = s.Settings.BufferSizeKbps;
+        Settings.GpuPreset = s.Settings.GpuPreset;
+        Settings.Multipass = s.Settings.Multipass;
+        Settings.SpatialAq = s.Settings.SpatialAq;
+        Settings.AqStrength = s.Settings.AqStrength;
+        Settings.RcLookahead = s.Settings.RcLookahead;
+        Settings.BFrames = s.Settings.BFrames;
+        Settings.RefFrames = s.Settings.RefFrames;
+        Settings.ForcedIdr = s.Settings.ForcedIdr;
+        Settings.AqMode = s.Settings.AqMode;
+        Settings.CpuAqStrength = s.Settings.CpuAqStrength;
+        Settings.PsyRd = s.Settings.PsyRd;
+        Settings.KeyInt = s.Settings.KeyInt;
+        Settings.MinKeyInt = s.Settings.MinKeyInt;
+        Settings.StartFrame = s.Settings.StartFrame;
+        Settings.FrameCount = s.Settings.FrameCount;
+        Settings.Width = s.Settings.Width;
+        Settings.Height = s.Settings.Height;
+        Settings.GpuDevice = s.Settings.GpuDevice;
+
+        KeepOriginalResolution = s.Settings.KeepOriginalResolution;
         OutputDir = s.OutputDir;
-        SelectedAfter = s.AfterCompletion;
+
+        RaiseVisibility();
     }
 
     // ---------- 选择器变更：同步到 Settings 并刷新可见性 ----------
@@ -332,9 +408,13 @@ public partial class VideoViewModel : ObservableObject
 
     partial void OnSelectedQualityPresetChanged(string value)
     {
-        // 同时写 CRF（CPU 路径）与 CQP Quality（GPU 路径），编码器解析到哪条都用同一档
-        Settings.Crf = QualityPresetToValue(value);
-        Settings.Quality = QualityPresetToValue(value);
+        // 【v1.4.1 / B1 修复】同时写 CRF（CPU 路径）与 CQP Quality（GPU 路径），
+        // 并且把两条路径的「模式」一并切到恒定质量——否则 GPU 分支仍在读
+        // RateControl 默认值走 -rc vbr -b:v 4000k，四档数值被完全忽略，
+        // 选「低」和「非常高」输出完全相同。
+        // 抽到 QualityPresets.Apply 里，Harness 可直接断言，防止再次逃逸。
+        QualityPresets.Apply(Settings, value);
+        RaiseVisibility();
     }
 
     partial void OnGpuInfoChanged(GpuInfo value)
@@ -351,6 +431,7 @@ public partial class VideoViewModel : ObservableObject
     partial void OnSelectedProfileChanged(string value) => Settings.Profile = value;
     partial void OnSelectedGpuTuneChanged(string value) => Settings.GpuTune = value;
     partial void OnSelectedCpuPresetChanged(string value) => Settings.CpuPreset = value;
+    partial void OnSelectedCpuTuneChanged(string value) => Settings.CpuTune = value;
     partial void OnSelectedAfterChanged(string value) => Settings.AfterCompletion = value;
     partial void OnGpuDeviceChanged(int value) => Settings.GpuDevice = value;
     partial void OnKeepOriginalResolutionChanged(bool value) => Settings.KeepOriginalResolution = value;
@@ -378,8 +459,16 @@ public partial class VideoViewModel : ObservableObject
         Settings.Profile = SelectedProfile;
         Settings.GpuTune = SelectedGpuTune;
         Settings.CpuPreset = SelectedCpuPreset;
+        Settings.CpuTune = SelectedCpuTune;
         Settings.AfterCompletion = SelectedAfter;
         Settings.GpuDevice = GpuDevice;
+
+        // 保持「质量档」与「实际参数」的一致性：
+        // 高级/专家级改过码率控制后，若用户又切回普通级档位，这里也不会留下错位。
+        if (UserLevel == UserLevel.Default)
+        {
+            QualityPresets.Apply(Settings, SelectedQualityPreset);
+        }
     }
 
     /// <summary>检测硬件能力（供参数构建与编码器解析使用）。</summary>
@@ -411,12 +500,19 @@ public partial class VideoViewModel : ObservableObject
         }
     }
 
-    /// <summary>添加文件到队列（去重）。</summary>
+    /// <summary>
+    /// 添加文件到队列（去重）。
+    /// v1.4.1：改为 HashSet 预存现有路径，批量拖入 N 个文件由 O(N²) 降到 O(N)；
+    /// 顺带按 Windows 语义做大小写不敏感去重（此前的 == 比较大小写敏感）。
+    /// </summary>
     public void AddFiles(IEnumerable<string> paths)
     {
+        var existing = new HashSet<string>(
+            Queue.Select(i => i.InputPath), StringComparer.OrdinalIgnoreCase);
+
         foreach (var p in paths)
         {
-            if (Queue.Any(i => i.InputPath == p))
+            if (!existing.Add(p))
             {
                 continue;
             }
@@ -562,7 +658,156 @@ public partial class VideoViewModel : ObservableObject
             IsEncoding = false;
             _cts?.Dispose();
             _cts = null;
-            StatusText = Queue.All(i => i.IsDone) ? "全部完成" : "编码结束";
+
+            // 【v1.4.1 / B3 修复】出错时必须保留 catch 里写入的具体原因。
+            // 此前 finally 无条件覆盖成「全部完成 / 编码结束」，
+            // 用户点开只能看到「失败」却永远看不到失败原因。
+            if (!Queue.Any(i => i.HasError))
+            {
+                StatusText = Queue.All(i => i.IsDone) ? "全部完成" : "编码结束";
+            }
+        }
+
+        // 【v1.4.1 / B2 修复】真正消费「编码完成后」设置——此前该下拉只写设置、
+        // 从来没有任何代码分派关机 / 休眠 / 退出，属欺骗性 UI。
+        await RunAfterCompletionAsync();
+    }
+
+    /// <summary>关机倒计时窗口（秒）：给用户在系统关机前留出反悔时间。</summary>
+    private const int ShutdownCountdownSeconds = 60;
+
+    /// <summary>休眠倒计时窗口（秒）。</summary>
+    private const int HibernateCountdownSeconds = 20;
+
+    /// <summary>
+    /// 执行「编码完成后」动作（none / exit / shutdown / hibernate）。
+    /// <para>安全策略：仅当队列全部成功、且未被取消时才执行——
+    /// 有失败项时跳过，避免「压到一半失败了却把机器关了」。</para>
+    /// </summary>
+    private async Task RunAfterCompletionAsync()
+    {
+        var action = Settings.AfterCompletion;
+        if (string.IsNullOrWhiteSpace(action) || action == "none" || Queue.Count == 0)
+        {
+            return;
+        }
+
+        var failed = Queue.Count(i => i.HasError);
+        if (failed > 0)
+        {
+            StatusText = $"编码结束（{failed} 项失败，已跳过「编码完成后」动作）";
+            return;
+        }
+
+        if (!Queue.All(i => i.IsDone))
+        {
+            return; // 被取消或中断
+        }
+
+        switch (action)
+        {
+            case "exit":
+                StatusText = "编码完成，正在退出程序…";
+                await Task.Delay(600);
+                App.Current.Exit();
+                return;
+
+            case "shutdown":
+                // 先让操作系统排定 60 秒后关机（OS 级计时，应用退出也照样执行），
+                // 再给用户一个可取消的窗口；用户点取消则 shutdown /a 撤销。
+                RunSystemCommand("shutdown", $"/s /t {ShutdownCountdownSeconds}", "关机");
+                StatusText = $"编码完成，系统将在 {ShutdownCountdownSeconds} 秒后关机";
+                if (!await ConfirmPowerActionAsync("即将关机",
+                        $"队列已全部完成，计算机将在 {ShutdownCountdownSeconds} 秒后关机。",
+                        ShutdownCountdownSeconds))
+                {
+                    RunSystemCommand("shutdown", "/a", "取消关机");
+                    StatusText = "编码完成（已取消关机）";
+                }
+                return;
+
+            case "hibernate":
+                // 休眠无法由系统排定延时，只能用应用内倒计时 + 用户确认。
+                if (await ConfirmPowerActionAsync("即将休眠",
+                        $"队列已全部完成，计算机将在 {HibernateCountdownSeconds} 秒后休眠。",
+                        HibernateCountdownSeconds))
+                {
+                    StatusText = "编码完成，正在休眠…";
+                    RunSystemCommand("shutdown", "/h", "休眠");
+                }
+                else
+                {
+                    StatusText = "编码完成（已取消休眠）";
+                }
+                return;
+        }
+    }
+
+    /// <summary>
+    /// 倒计时确认窗口：倒计时内用户无操作 → 返回 true（执行动作）；
+    /// 用户点「取消」→ 返回 false。窗口不可用（无 XamlRoot 等）时返回 false，保守处理。
+    /// </summary>
+    private static async Task<bool> ConfirmPowerActionAsync(string title, string message, int seconds)
+    {
+        ContentDialog? dialog = null;
+        try
+        {
+            dialog = new ContentDialog
+            {
+                XamlRoot = App.Window.Content.XamlRoot,
+                Title = title,
+                Content = message + "\n\n如需中止，请点击「取消」。",
+                PrimaryButtonText = "立即执行",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Close
+            };
+
+            var show = dialog.ShowAsync().AsTask();
+            var timeout = Task.Delay(TimeSpan.FromSeconds(seconds));
+
+            if (await Task.WhenAny(show, timeout) == timeout)
+            {
+                // 倒计时结束、用户未干预 → 视为同意执行
+                SafeHide(dialog);
+                Forget(show);
+                return true;
+            }
+
+            var result = await show;
+            return result == ContentDialogResult.Primary;
+        }
+        catch (Exception ex)
+        {
+            App.LogCrash(ex, "VideoViewModel.ConfirmPowerActionAsync");
+            SafeHide(dialog);
+            return false;
+        }
+    }
+
+    private static void SafeHide(ContentDialog? dialog)
+    {
+        try { dialog?.Hide(); } catch { /* 忽略 */ }
+    }
+
+    /// <summary>丢弃任务并吞掉可能的异常，避免未观察异常触发进程级崩溃。</summary>
+    private static void Forget(Task task) =>
+        task.ContinueWith(t => { _ = t.Exception; }, TaskScheduler.Default);
+
+    private static void RunSystemCommand(string file, string args, string label)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = file,
+                Arguments = args,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+        }
+        catch (Exception ex)
+        {
+            App.LogCrash(ex, $"VideoViewModel.RunSystemCommand:{label}");
         }
     }
 

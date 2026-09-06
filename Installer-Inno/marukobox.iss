@@ -1,4 +1,4 @@
-﻿; 小丸工具箱 2026 —— Inno Setup 安装包（零 UAC / 当前用户 / 中文向导）
+﻿; MarukoBox 2026 —— Inno Setup 安装包（零 UAC / 当前用户 / 中文向导）
 ; 注意：本文件含中文，必须是 UTF-8 BOM，否则 iscc 读中文会乱码。
 ;       改过本文件后若去掉了 BOM，请用 Python 补回：
 ;       open(p,'wb').write(b'\xef\xbb\xbf'+open(p,'rb').read())
@@ -13,8 +13,8 @@
   #define OutDir "C:\mb_inno_out"
 #endif
 
-#define MyAppName "小丸工具箱 2026"
-#define MyAppVersion "1.4.0"
+#define MyAppName "MarukoBox 2026"
+#define MyAppVersion "1.4.1"
 #define MyAppPublisher "MarukoBox"
 #define MyAppURL "https://github.com/"
 #define MyAppExeName "MarukoBox.exe"
@@ -29,6 +29,8 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
+; 安装向导内展示的许可证（仓库根 LICENSE，GPL-3.0；内置 ffmpeg 为 GPL，见 THIRD-PARTY-NOTICES）
+LicenseFile=..\LICENSE
 ; 当前用户安装，不触发 UAC
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=commandline

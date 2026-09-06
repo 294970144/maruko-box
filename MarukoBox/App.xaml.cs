@@ -41,11 +41,83 @@ public partial class App : Application
         WinRT.Interop.WindowNative.GetWindowHandle(Window);
 
     /// <summary>
-    /// 崩溃 / 诊断日志路径。任何未捕获异常都会落盘，便于定位闪退根因。
+    /// 崩溃 / 诊断日志目录。任何未捕获异常都会落盘，便于定位闪退根因。
+    /// <para>
+    /// v1.4.1（S4）：原先写在 <c>%USERPROFILE%\marukobox_crash.log</c>——
+    /// 用户根目录常被云同步/备份工具扫描，且该位置「显眼又不合适」。
+    /// 现在与 config.json 同域：<c>%LOCALAPPDATA%\MarukoBox\logs\</c>。
+    /// </para>
     /// </summary>
-    public static readonly string LogPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        "marukobox_crash.log");
+    public static readonly string LogDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "MarukoBox", "logs");
+
+    /// <summary>崩溃 / 诊断日志路径。</summary>
+    public static readonly string LogPath = Path.Combine(LogDirectory, "marukobox.log");
+
+    /// <summary>单个日志文件的大小上限（超过则轮转）。</summary>
+    private const long MaxLogBytes = 5L * 1024 * 1024;
+
+    /// <summary>最多保留的历史日志份数（.1.log ~ .3.log）。</summary>
+    private const int MaxLogGenerations = 3;
+
+    /// <summary>日志写入锁：stderr 线程与 UI 线程可能同时写。</summary>
+    private static readonly object LogGate = new();
+
+    /// <summary>
+    /// 写入一段日志文本。写入前按需轮转：超过 5 MB 时
+    /// .2.log → .3.log、.1.log → .2.log、当前 → .1.log，最多保留 3 份历史。
+    /// </summary>
+    private static void WriteLog(string text)
+    {
+        lock (LogGate)
+        {
+            try
+            {
+                Directory.CreateDirectory(LogDirectory);
+                RotateIfNeeded();
+                File.AppendAllText(LogPath, text);
+            }
+            catch
+            {
+                // 日志本身失败也不应影响主流程
+            }
+        }
+    }
+
+    private static void RotateIfNeeded()
+    {
+        try
+        {
+            var info = new FileInfo(LogPath);
+            if (!info.Exists || info.Length < MaxLogBytes)
+            {
+                return;
+            }
+
+            // 先删最老的一代，再依次后移
+            var oldest = LogPath + $".{MaxLogGenerations}.log";
+            if (File.Exists(oldest))
+            {
+                File.Delete(oldest);
+            }
+
+            for (var gen = MaxLogGenerations - 1; gen >= 1; gen--)
+            {
+                var from = LogPath + $".{gen}.log";
+                if (File.Exists(from))
+                {
+                    File.Move(from, LogPath + $".{gen + 1}.log");
+                }
+            }
+
+            File.Move(LogPath, LogPath + ".1.log");
+        }
+        catch
+        {
+            // 轮转失败不阻塞写入
+        }
+    }
 
     /// <summary>
     /// 记录一条崩溃异常（含堆栈），并尽量保证同步落盘。
@@ -66,7 +138,7 @@ public partial class App : Application
             }
 
             sb.AppendLine(new string('-', 60));
-            File.AppendAllText(LogPath, sb.ToString());
+            WriteLog(sb.ToString());
         }
         catch
         {
@@ -81,7 +153,7 @@ public partial class App : Application
     {
         try
         {
-            File.AppendAllText(LogPath, $"[{DateTime.Now:HH:mm:ss}] {message}\n");
+            WriteLog($"[{DateTime.Now:HH:mm:ss}] {message}\n");
         }
         catch
         {
@@ -100,6 +172,8 @@ public partial class App : Application
     /// </summary>
     public static void RunOnUiThread(Action action)
     {
+        // 注：Harness 等无窗口场景下 DispatcherQueue 为 null（AppStub 未初始化），
+        // 此时直接同步执行，与注释描述一致。
         var dq = DispatcherQueue;
         if (dq is null || dq.HasThreadAccess)
         {
