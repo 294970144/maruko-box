@@ -46,6 +46,9 @@ WizardStyle=modern
 ; 64 位模式（x64compatible 取代已废弃的 x64，避免编译警告）
 ArchitecturesInstallIn64BitMode=x64compatible
 ChangesAssociations=no
+; 覆盖安装时若应用正在运行：经重启管理器静默关闭后替换文件，
+; 避免「文件被占用 → 中止安装」。只影响使用被替换文件的进程（即本应用）。
+CloseApplications=force
 
 [Languages]
 ; 官方 ChineseSimplified.isl 需自行放入 Inno 的 Languages 目录
@@ -70,4 +73,62 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilen
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+
+; ---------------------------------------------------------------------------
+; 旧版本检测与自动卸载（ssInstall：即将复制新文件之前）
 ;
+; 背景：AppId 不变时 Inno 本身就是「覆盖式升级」——同一目录、共用同一卸载日志、
+; 不会产生重复的「添加/删除程序」条目（官方 FAQ：How to create an installation
+; that is an "update" or "add-on"）。这里在此之上再做一次静默卸载旧版，用于：
+;   1) 清掉新包中已移除的旧文件（纯覆盖安装会一直残留）；
+;   2) 旧 exe 被删除后，资源管理器/任务栏的图标缓存自然失效，新图标即时可见。
+;
+; 用户数据不受影响：config.json / session.json 存放在
+; %LOCALAPPDATA%\MarukoBox（{app} 之外），且 [UninstallDelete] 只删 {app}。
+; ---------------------------------------------------------------------------
+[Code]
+const
+  // 与 [Setup] AppId 一一对应：Inno 的卸载注册表键固定为 <AppId>_is1。
+  // 本安装包 PrivilegesRequired=lowest（当前用户安装），键在 HKCU；
+  // 仍先查 HKLM 兜底历史遗留的管理员安装。
+  UninstRegKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{9F3E1C2A-4B7D-4E5F-8C2A-1B3D4E5F6A7B}_is1';
+
+function GetOldUninstallString(): String;
+var
+  S: String;
+begin
+  Result := '';
+
+  if not RegQueryStringValue(HKCU, UninstRegKey, 'UninstallString', S) then
+  begin
+    if not RegQueryStringValue(HKLM, UninstRegKey, 'UninstallString', S) then
+    begin
+      Exit; // 没有已安装的旧版本
+    end;
+  end;
+
+  // UninstallString 一般是带引号的 "...\unins000.exe"
+  Result := RemoveQuotes(Trim(S));
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  OldUninstaller: String;
+  ResultCode: Integer;
+begin
+  if CurStep <> ssInstall then
+  begin
+    Exit;
+  end;
+
+  OldUninstaller := GetOldUninstallString();
+  if (OldUninstaller <> '') and FileExists(OldUninstaller) then
+  begin
+    // 静默卸载旧版：不弹确认框、不重启，等卸载器退出后再继续复制新文件。
+    // 旧版若正在运行，其 exe 可能被占用而延后删除——
+    // [Setup] 的 CloseApplications=force 会在随后替换文件前经重启管理器关闭它。
+    Exec(OldUninstaller, '/SILENT /SUPPRESSMSGBOXES /NORESTART', '',
+         SW_SHOW, ewWaitUntilTerminated, ResultCode);
+  end;
+end;
+
