@@ -547,12 +547,43 @@ public partial class VideoViewModel : ObservableObject
         }
     }
 
-    /// <summary>计算输出路径（用户指定目录优先，否则源文件同目录，文件名加 _encoded 后缀）。</summary>
+    /// <summary>当前生效的输出文件命名规则（每个 VM 实例只读一次配置，之后缓存）。</summary>
+    private string? _namingRule;
+
+    private string NamingRule =>
+        _namingRule ??= OutputNaming.Normalize(_config.Load().OutputFileNameRule);
+
+    /// <summary>当前编码器对应的短名（供「编码格式」命中名规则使用）。</summary>
+    private string CodecTag()
+    {
+        var type = SelectedEncoderOption?.Type ?? EncoderType.Auto;
+        return type switch
+        {
+            EncoderType.NvencHevc or EncoderType.AmfHevc or EncoderType.QsvHevc or EncoderType.X265 => "hevc",
+            EncoderType.NvencH264 or EncoderType.X264 => "h264",
+            _ => "auto"
+        };
+    }
+
+    /// <summary>
+    /// 目标分辨率（供「分辨率」命中名规则使用）。
+    /// 勾选「保持原始分辨率」时不做探测，留空——命名时该片段会被自动丢弃。
+    /// </summary>
+    private string ResolutionTag() =>
+        !KeepOriginalResolution && Settings.Width > 0 && Settings.Height > 0
+            ? $"{Settings.Width}x{Settings.Height}"
+            : string.Empty;
+
+    /// <summary>计算输出路径（目录按输出文件夹设置，文件名按「输出文件命名规则」生成）。</summary>
     private string ComputeOutputPath(string inputPath)
     {
-        var dir = OutputPathHelper.ResolveDir(Path.GetDirectoryName(inputPath) ?? ".", OutputDir);
-        var name = Path.GetFileNameWithoutExtension(inputPath) + "_encoded." + SelectedContainer;
-        return Path.Combine(dir, name);
+        return OutputNaming.BuildOutputPath(NamingRule, inputPath, OutputDir,
+            new OutputNamingContext(
+                inputPath,
+                Suffix: "encoded",
+                Codec: CodecTag(),
+                Resolution: ResolutionTag(),
+                Extension: "." + SelectedContainer));
     }
 
     /// <summary>通过文件夹选择器设定输出文件夹。</summary>

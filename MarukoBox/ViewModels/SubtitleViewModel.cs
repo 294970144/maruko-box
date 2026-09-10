@@ -18,6 +18,11 @@ public partial class SubtitleViewModel : ObservableObject
     private readonly IFfmpegService _ffmpeg = AppServices.Ffmpeg;
     private readonly IConfigService _config = AppServices.Config;
     private CancellationTokenSource? _cts;
+    private string? _namingRule;
+
+    /// <summary>当前生效的输出文件命名规则（每个 VM 实例只读一次配置，之后缓存）。</summary>
+    private string NamingRule =>
+        _namingRule ??= OutputNaming.Normalize(_config.Load().OutputFileNameRule);
 
     // ---------- 抽取区 ----------
     [ObservableProperty]
@@ -179,9 +184,8 @@ public partial class SubtitleViewModel : ObservableObject
             return;
         }
 
-        var dir = OutputPathHelper.ResolveDir(Path.GetDirectoryName(EmbedVideo) ?? ".", OutputDir);
-        var baseName = Path.GetFileNameWithoutExtension(EmbedVideo);
-        var outVideo = Path.Combine(dir, baseName + "_withsub.mkv");
+        var outVideo = OutputNaming.BuildOutputPath(NamingRule, EmbedVideo, OutputDir,
+            new OutputNamingContext(EmbedVideo, "withsub", string.Empty, string.Empty, ".mkv"));
 
         IsBusy = true;
         _cts = new CancellationTokenSource();
@@ -219,15 +223,14 @@ public partial class SubtitleViewModel : ObservableObject
             return;
         }
 
-        var dir = OutputPathHelper.ResolveDir(Path.GetDirectoryName(ConvertInput) ?? ".", OutputDir);
-        var baseName = Path.GetFileNameWithoutExtension(ConvertInput);
         var ext = SelectedTargetFormat switch
         {
             "srt" => ".srt",
             "vtt" => ".vtt",
             _ => ".ass"
         };
-        var outSub = Path.Combine(dir, baseName + "_conv" + ext);
+        var outSub = OutputNaming.BuildOutputPath(NamingRule, ConvertInput, OutputDir,
+            new OutputNamingContext(ConvertInput, "conv", string.Empty, string.Empty, ext));
 
         IsBusy = true;
         _cts = new CancellationTokenSource();

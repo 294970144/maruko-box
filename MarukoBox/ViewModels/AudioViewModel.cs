@@ -18,6 +18,11 @@ public partial class AudioViewModel : ObservableObject
     private readonly IFfmpegService _ffmpeg = AppServices.Ffmpeg;
     private readonly IConfigService _config = AppServices.Config;
     private CancellationTokenSource? _cts;
+    private string? _namingRule;
+
+    /// <summary>当前生效的输出文件命名规则（每个 VM 实例只读一次配置，之后缓存）。</summary>
+    private string NamingRule =>
+        _namingRule ??= OutputNaming.Normalize(_config.Load().OutputFileNameRule);
 
     /// <summary>批量队列（复用 EncodeItem，仅用到音视频无关字段）。</summary>
     public ObservableCollection<EncodeItem> Queue { get; } = new();
@@ -193,7 +198,6 @@ public partial class AudioViewModel : ObservableObject
                 item.StatusText = "转码中";
                 item.Percent = 0;
 
-                var outDir = OutputPathHelper.ResolveDir(Path.GetDirectoryName(item.InputPath) ?? ".", OutputDir);
                 var ext = preset.Codec switch
                 {
                     "aac" => ".m4a",
@@ -202,7 +206,8 @@ public partial class AudioViewModel : ObservableObject
                     "mp3" => ".mp3",
                     _ => Path.GetExtension(item.InputPath)
                 };
-                var outPath = Path.Combine(outDir, Path.GetFileNameWithoutExtension(item.InputPath) + "_audio" + ext);
+                var outPath = OutputNaming.BuildOutputPath(NamingRule, item.InputPath, OutputDir,
+                    new OutputNamingContext(item.InputPath, "audio", preset.Codec, string.Empty, ext));
 
                 var prog = new Progress<EncodeProgress>(p =>
                 {

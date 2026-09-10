@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using MarukoBox.Models;
 using MarukoBox.ViewModels;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 
@@ -39,13 +40,43 @@ public sealed partial class VideoPage : Page
         }
     }
 
-    private void DropZone_DragOver(object sender, DragEventArgs e)
+    // ---------- 拖放：整个左侧栏都是放置区 ----------
+
+    private void Sidebar_DragEnter(object sender, DragEventArgs e)
     {
-        e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+        // 只认文件拖入；拖文本 / 链接进来不弹提示，也不接受放置
+        if (e.DataView is null || !e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            return;
+        }
+
+        e.AcceptedOperation = DataPackageOperation.Copy;
+        if (e.DragUIOverride is not null)
+        {
+            e.DragUIOverride.Caption = "松开即可添加文件";
+            e.DragUIOverride.IsCaptionVisible = true;
+        }
+
+        DropOverlay.Visibility = Visibility.Visible;
     }
 
-    private async void DropZone_Drop(object sender, DragEventArgs e)
+    private void Sidebar_DragOver(object sender, DragEventArgs e)
     {
+        if (e.DataView is not null && e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            e.AcceptedOperation = DataPackageOperation.Copy;
+        }
+    }
+
+    private void Sidebar_DragLeave(object sender, DragEventArgs e)
+    {
+        DropOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private async void Sidebar_Drop(object sender, DragEventArgs e)
+    {
+        DropOverlay.Visibility = Visibility.Collapsed;
+
         if (e.DataView is null)
         {
             return;

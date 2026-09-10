@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MarukoBox.Helpers;
 using MarukoBox.Models;
 using MarukoBox.Services;
 
@@ -17,6 +18,11 @@ public partial class MuxViewModel : ObservableObject
     private readonly IFfmpegService _ffmpeg = AppServices.Ffmpeg;
     private readonly IConfigService _config = AppServices.Config;
     private CancellationTokenSource? _cts;
+    private string? _namingRule;
+
+    /// <summary>当前生效的输出文件命名规则（每个 VM 实例只读一次配置，之后缓存）。</summary>
+    private string NamingRule =>
+        _namingRule ??= OutputNaming.Normalize(_config.Load().OutputFileNameRule);
 
     /// <summary>参与合并的输入列表（视频 / 音频 / 字幕）。</summary>
     public ObservableCollection<MuxInput> Inputs { get; } = new();
@@ -109,13 +115,13 @@ public partial class MuxViewModel : ObservableObject
             return;
         }
 
-        // 输出路径未设置时，基于第一个输入自动生成（同目录 + _muxed + 容器后缀）。
+        // 输出路径未设置时，基于第一个输入自动生成（同目录，文件名按「输出文件命名规则」）。
         if (string.IsNullOrWhiteSpace(OutputPath))
         {
             var first = Inputs[0];
-            var dir = Path.GetDirectoryName(first.FilePath) ?? ".";
-            var baseName = Path.GetFileNameWithoutExtension(first.FilePath);
-            OutputPath = Path.Combine(dir, baseName + "_muxed" + ContainerExt(SelectedContainer));
+            OutputPath = OutputNaming.BuildOutputPath(NamingRule, first.FilePath, null,
+                new OutputNamingContext(first.FilePath, "muxed", string.Empty, string.Empty,
+                    ContainerExt(SelectedContainer)));
         }
 
         var dirOut = Path.GetDirectoryName(OutputPath);

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MarukoBox.Helpers;
 using MarukoBox.Models;
 
 namespace MarukoBox.Services;
@@ -96,6 +97,12 @@ public class AppConfig
 
     /// <summary>默认输出目录。为空时输出到源文件同目录。</summary>
     public string OutputDirectory { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 输出文件命名规则（存中文显示名，可选项见 <see cref="OutputNaming.Options"/>）。
+    /// 默认「原名 + 时间」；未知或非法值由 <see cref="OutputNaming.Normalize"/> 回退默认。
+    /// </summary>
+    public string OutputFileNameRule { get; set; } = OutputNaming.DefaultRule;
 
     /// <summary>多 GPU 时使用的设备序号（0 = 自动/第一张）。</summary>
     public int GpuDevice { get; set; }

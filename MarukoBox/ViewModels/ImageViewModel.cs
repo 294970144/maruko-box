@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MarukoBox.Helpers;
 using MarukoBox.Models;
 using MarukoBox.Services;
 
@@ -133,6 +134,12 @@ public partial class ImageViewModel : ObservableObject
         }
     }
 
+    /// <summary>当前生效的输出文件命名规则（每个 VM 实例只读一次配置，之后缓存）。</summary>
+    private string? _namingRule;
+
+    private string NamingRule =>
+        _namingRule ??= OutputNaming.Normalize(_config.Load().OutputFileNameRule);
+
     [RelayCommand]
     private async Task ConvertImageAsync()
     {
@@ -147,15 +154,14 @@ public partial class ImageViewModel : ObservableObject
             return;
         }
 
-        var dir = Path.GetDirectoryName(InputImage) ?? ".";
-        var baseName = Path.GetFileNameWithoutExtension(InputImage);
         var ext = SelectedImageFormat switch
         {
             "jpg" => ".jpg",
             "webp" => ".webp",
             _ => ".png"
         };
-        var outPath = Path.Combine(dir, baseName + "_conv" + ext);
+        var outPath = OutputNaming.BuildOutputPath(NamingRule, InputImage, null,
+            new OutputNamingContext(InputImage, "conv", SelectedImageFormat, string.Empty, ext));
 
         IsBusy = true;
         _cts = new CancellationTokenSource();

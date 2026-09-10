@@ -21,7 +21,21 @@ public sealed partial class MainWindow : Window
         // 用绝对路径（BaseDirectory 即 exe 所在目录），避免从开始菜单快捷方式启动时
         // 当前工作目录(CWD)≠exe 目录导致相对路径 "Assets/AppIcon.ico" 解析失败、图标静默失效。
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
+
+        // WinUI 3 的 Window 没有 MinWidth / MinHeight 属性，最小尺寸只能经
+        // OverlappedPresenter 设置；低于该尺寸时三列布局会挤成一团，故设下限。
+        if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
+        {
+            presenter.PreferredMinimumWidth = MinWindowWidth;
+            presenter.PreferredMinimumHeight = MinWindowHeight;
+        }
     }
+
+    /// <summary>窗口最小宽度（三列布局的可用地：左 200 + 中 300 + 右 220 + 间距与内边距）。</summary>
+    private const int MinWindowWidth = 1000;
+
+    /// <summary>窗口最小高度。</summary>
+    private const int MinWindowHeight = 640;
 
     /// <summary>
     /// 保持习惯：若配置开启，则从当前 Frame 找到视频页并把参数快照写入 session.json。

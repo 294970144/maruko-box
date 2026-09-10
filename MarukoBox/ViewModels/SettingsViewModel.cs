@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MarukoBox.Helpers;
 using MarukoBox.Models;
 using MarukoBox.Services;
 using Microsoft.UI.Xaml.Controls;
@@ -50,10 +51,16 @@ public partial class SettingsViewModel : ObservableObject
         "普通", "高级", "专家"
     };
 
-    /// <summary>软件更新源下拉选项（GitHub 主源 / Gitee 镜像）。</summary>
+    /// <summary>
+    /// 输出文件命名规则下拉选项（预设组合，见 <see cref="OutputNaming.Options"/>）。
+    /// 作用于全部页面的输出文件名（视频 / 图片 / 音频 / 封装 / 字幕）。
+    /// </summary>
+    public ObservableCollection<string> OutputFileNameRuleOptions { get; } = new(OutputNaming.Options);
+
+    /// <summary>软件更新源下拉选项（GitHub 主源 / CN 国内镜像）。</summary>
     public ObservableCollection<string> UpdateSourceOptions { get; } = new()
     {
-        "GitHub", "Gitee 镜像"
+        "GitHub", "CN"
     };
 
     /// <summary>
@@ -129,6 +136,14 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial bool RememberLastSession { get; set; } = true;
 
+    /// <summary>当前选中的输出文件命名规则（中文显示名，直接持久化）。</summary>
+    [ObservableProperty]
+    public partial string SelectedOutputFileNameRule { get; set; } = OutputNaming.DefaultRule;
+
+    /// <summary>命名规则的示例预览（让用户直观看到会生成什么文件名）。</summary>
+    [ObservableProperty]
+    public partial string OutputFileNamePreview { get; set; } = OutputNaming.Preview(OutputNaming.DefaultRule);
+
     /// <summary>当前选中的软件更新源（中文显示名；配置存储代码）。</summary>
     [ObservableProperty]
     public partial string SelectedUpdateSource { get; set; } = "GitHub";
@@ -142,6 +157,8 @@ public partial class SettingsViewModel : ObservableObject
         GpuDevice = config.GpuDevice;
         RememberLastSession = config.RememberLastSession;
         SelectedUserLevel = UserLevels.ToDisplay(UserLevels.Parse(config.UserLevel));
+        SelectedOutputFileNameRule = OutputNaming.Normalize(config.OutputFileNameRule);
+        OutputFileNamePreview = OutputNaming.Preview(SelectedOutputFileNameRule);
         SelectedUpdateSource = UpdateSourceCodeToDisplay(config.UpdateSource);
 
         // 记录"未保存前"的实际值，Save() 比对时使用——
@@ -264,6 +281,7 @@ public partial class SettingsViewModel : ObservableObject
             DefaultEncoder = SelectedEncoderOption?.Type.ToString() ?? "Auto",
             Theme = ThemeToCode(Theme),
             OutputDirectory = OutputDirectory,
+            OutputFileNameRule = SelectedOutputFileNameRule,
             GpuDevice = GpuDevice,
             UserLevel = UserLevels.DisplayToCode(SelectedUserLevel),
                 RememberLastSession = RememberLastSession,
@@ -337,17 +355,29 @@ public partial class SettingsViewModel : ObservableObject
         App.Current.Exit();
     }
 
+    // ---------- 输出命名规则 ----------
+
+    /// <summary>规则变化时同步刷新示例预览。</summary>
+    partial void OnSelectedOutputFileNameRuleChanged(string value)
+    {
+        OutputFileNamePreview = OutputNaming.Preview(value);
+    }
+
     // ---------- 更新源显示名 <-> 配置代码 ----------
 
+    /// <summary>
+    /// 配置代码 → 下拉显示名。
+    /// 旧配置里的 "gitee" 视为 "cn"（CN 源此前就是 Gitee 镜像），无需迁移。
+    /// </summary>
     private static string UpdateSourceCodeToDisplay(string code) => code?.Trim().ToLowerInvariant() switch
     {
-        "gitee" => "Gitee 镜像",
+        "gitee" or "cn" => "CN",
         _ => "GitHub"
     };
 
     private static string UpdateSourceDisplayToCode(string display) => display switch
     {
-        "Gitee 镜像" => "gitee",
+        "CN" or "Gitee 镜像" => "cn",
         _ => "github"
     };
 
@@ -372,7 +402,7 @@ public partial class SettingsViewModel : ObservableObject
         UpdateStatusMessage = "正在检查软件更新…";
         try
         {
-            var source = SelectedUpdateSource == "Gitee 镜像" ? UpdateSource.Gitee : UpdateSource.GitHub;
+            var source = SelectedUpdateSource == "CN" ? UpdateSource.CN : UpdateSource.GitHub;
             var latest = await _update.GetLatestAppReleaseAsync(source);
             var current = _update.GetAppVersion();
 
@@ -503,7 +533,8 @@ public partial class SettingsViewModel : ObservableObject
             // 5) 内置 ffmpeg 新版检查（GitHub；按本机驱动兼容性推荐）
             try
             {
-                var rec = await _update.GetRecommendedFfmpegAsync(GpuInfo);
+                var depSource = SelectedUpdateSource == "CN" ? UpdateSource.CN : UpdateSource.GitHub;
+                var rec = await _update.GetRecommendedFfmpegAsync(GpuInfo, depSource);
                 if (!rec.Recommended)
                 {
                     // 全部候选被驱动门槛拦截（最常见：N 卡驱动 <610 无法跑 8.x NVENC）
@@ -612,7 +643,8 @@ public partial class SettingsViewModel : ObservableObject
     {
         try
         {
-            var releases = await _update.GetAllFfmpegReleasesAsync();
+            var listSource = SelectedUpdateSource == "CN" ? UpdateSource.CN : UpdateSource.GitHub;
+            var releases = await _update.GetAllFfmpegReleasesAsync(listSource);
             FfmpegReleaseRows.Clear();
             foreach (var r in releases)
             {

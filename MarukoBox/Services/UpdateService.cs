@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using MarukoBox.Models;
 
 namespace MarukoBox.Services;
@@ -8,14 +10,20 @@ namespace MarukoBox.Services;
 /// <summary>软件自身（MarukoBox）在 GitHub 上的最新 Release 信息。</summary>
 public record AppReleaseInfo(string Tag, string Version, string DownloadUrl);
 
-/// <summary>软件自身更新源（MarukoBox 仓库镜像）。GitHub 为主源，Gitee 为国内镜像。</summary>
+/// <summary>
+/// 更新源。同时决定「软件自身更新」与「内置 ffmpeg 依赖更新」去哪里取：
+/// <list type="bullet">
+/// <item>GitHub：软件取 GitHub Releases，ffmpeg 取 jellyfin-ffmpeg 的 GitHub Releases。</item>
+/// <item>CN：软件取 Gitee 镜像仓库，ffmpeg 取兰州大学开源社区镜像站（纯文件索引）。</item>
+/// </list>
+/// </summary>
 public enum UpdateSource
 {
     /// <summary>GitHub Releases（默认，海外，速度视网络）。</summary>
     GitHub,
 
-    /// <summary>Gitee 镜像（国内访问更快；匿名只读公开仓库）。</summary>
-    Gitee
+    /// <summary>国内镜像：软件走 Gitee，ffmpeg 走兰州大学镜像站；任一端失败自动回退 GitHub。</summary>
+    CN
 }
 
 /// <summary>
@@ -59,18 +67,21 @@ public interface IUpdateService
     string GetLocalVersion();
 
     /// <summary>
-    /// 从 GitHub 拉取 jellyfin-ffmpeg 全部 release（跳过 draft）的完整信息。
-    /// 含 published_at、资产大小、是否 prerelease；供「程序员」专列版本列表与
+    /// 拉取 jellyfin-ffmpeg 全部 release（跳过 draft）的完整信息。
+    /// 源由 <paramref name="source"/> 决定：CN 走国内镜像，失败自动回退 GitHub。
+    /// 含 published_at、资产大小、是否 prerelease；供「专家」专列版本列表与
     /// <see cref="GetRecommendedFfmpegAsync"/> 复用，避免重复请求。
     /// </summary>
-    Task<IReadOnlyList<RemoteFfmpegRelease>> GetAllFfmpegReleasesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<RemoteFfmpegRelease>> GetAllFfmpegReleasesAsync(
+        UpdateSource source = UpdateSource.GitHub, CancellationToken ct = default);
 
     /// <summary>
     /// 按本机 GPU 驱动兼容性过滤，并在剩余版本中取最高者作为 ffmpeg 升级推荐。
     /// 若所有候选都因驱动门槛被拒，则返回 <see cref="FfmpegRecommendation.Recommended"/>=false
     /// 并在 <see cref="FfmpegRecommendation.BlockReason"/> 给出首个拦截原因。
     /// </summary>
-    Task<FfmpegRecommendation> GetRecommendedFfmpegAsync(GpuInfo gpu, CancellationToken ct = default);
+    Task<FfmpegRecommendation> GetRecommendedFfmpegAsync(GpuInfo gpu,
+        UpdateSource source = UpdateSource.GitHub, CancellationToken ct = default);
 
     /// <summary>
     /// 判定单条目标版本是否应被允许推送（NVENC API 门槛）。
@@ -101,8 +112,26 @@ public sealed partial class UpdateService : IUpdateService
         "https://api.github.com/repos/294970144/maruko-box/releases/latest";
 
     /// <summary>MarukoBox 仓库的 Gitee 镜像最新版 API（公开仓库，匿名只读）。</summary>
-    private const string AppRepoLatestApiGitee =
+    private const string AppRepoLatestApiCnGitee =
         "https://gitee.com/api/v5/repos/zhang-lin701442/maruko-box/releases/latest";
+
+    /// <summary>jellyfin-ffmpeg 的 GitHub Releases 列表 API。</summary>
+    private const string FfmpegReleasesApiGithub =
+        "https://api.github.com/repos/jellyfin/jellyfin-ffmpeg/releases?per_page=30";
+
+    /// <summary>
+    /// jellyfin-ffmpeg 的国内镜像根目录（兰州大学开源社区镜像站）。
+    /// 结构是纯文件索引：{root}{大版本}.x/{版本}/win64/jellyfin-ffmpeg_{版本}-portable_win64.zip
+    /// 没有 Releases API，版本列表靠解析目录索引获得。
+    /// </summary>
+    private const string FfmpegMirrorRootCn =
+        "https://mirror.lzu.edu.cn/jellyfin/ffmpeg/windows/";
+
+    /// <summary>
+    /// CN 源下最多探测多少个版本的 win64 目录（每个版本 1 次请求）。
+    /// 版本列表可能有几十个，全量探测太慢；取最新的这些已经覆盖用户的实际需求。
+    /// </summary>
+    private const int MirrorProbeLimit = 15;
 
     private readonly HttpClient _http = new()
     {
@@ -138,13 +167,15 @@ public sealed partial class UpdateService : IUpdateService
     public string GetLocalVersion() => ConfigService.GetBundledVersion();
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<RemoteFfmpegRelease>> GetAllFfmpegReleasesAsync(CancellationToken ct = default)
-        => await FetchAllReleasesAsync(ct).ConfigureAwait(false);
+    public async Task<IReadOnlyList<RemoteFfmpegRelease>> GetAllFfmpegReleasesAsync(
+        UpdateSource source = UpdateSource.GitHub, CancellationToken ct = default)
+        => await FetchAllReleasesAsync(source, ct).ConfigureAwait(false);
 
     /// <inheritdoc/>
-    public async Task<FfmpegRecommendation> GetRecommendedFfmpegAsync(GpuInfo gpu, CancellationToken ct = default)
+    public async Task<FfmpegRecommendation> GetRecommendedFfmpegAsync(GpuInfo gpu,
+        UpdateSource source = UpdateSource.GitHub, CancellationToken ct = default)
     {
-        var all = await FetchAllReleasesAsync(ct).ConfigureAwait(false);
+        var all = await FetchAllReleasesAsync(source, ct).ConfigureAwait(false);
 
         // 在通过兼容性门槛的版本中取最高；记录首个拦截原因以便汇总给用户。
         RemoteFfmpegRelease? best = null;
@@ -174,15 +205,32 @@ public sealed partial class UpdateService : IUpdateService
     /// 优先级：8.x 与 7.x 均入选（含 prerelease），这是为了确保 NVENC API 13.1
     /// 门槛与「程序员」专列版本列表都能看到完整候选。
     /// </summary>
-    private async Task<List<RemoteFfmpegRelease>> FetchAllReleasesAsync(CancellationToken ct)
+    private async Task<List<RemoteFfmpegRelease>> FetchAllReleasesAsync(UpdateSource source, CancellationToken ct)
     {
+        // CN 源：改走国内镜像站。镜像是纯文件索引，拿不到资产大小等信息，
+        // 但换来了稳定的下载速度；任何一步失败都静默回退 GitHub。
+        if (source == UpdateSource.CN)
+        {
+            try
+            {
+                var mirrored = await FetchMirrorReleasesAsync(ct).ConfigureAwait(false);
+                if (mirrored.Count > 0)
+                {
+                    return mirrored;
+                }
+            }
+            catch
+            {
+                // 镜像不可用（超时 / 结构变动）→ 继续走 GitHub
+            }
+        }
+
         // jellyfin-ffmpeg 的 8.x 系列在 GitHub 上标为 prerelease（7.x 已停止更新，
         // 稳定版止于 7.1.4-3）。/releases/latest 只返回稳定版，会漏掉 8.x——
         // 而 8.x 恰恰是需要 NVENC API 13.1 门槛、且被此前镜像渠道选中的版本。
         // 因此这里拉取全部 release（跳过 draft），保证 NVENC 门槛与
         // 「内置 ffmpeg 更新」语义一致：始终能发现 8.x 并正确应用门槛。
-        using var doc = await GetReleaseJsonAsync(
-            "https://api.github.com/repos/jellyfin/jellyfin-ffmpeg/releases?per_page=30", ct)
+        using var doc = await GetReleaseJsonAsync(FfmpegReleasesApiGithub, ct)
             .ConfigureAwait(false);
 
         if (doc.RootElement.ValueKind != JsonValueKind.Array)
@@ -254,10 +302,160 @@ public sealed partial class UpdateService : IUpdateService
         return (null, 0);
     }
 
+    // ---------- CN 镜像：jellyfin-ffmpeg（兰州大学开源社区镜像站） ----------
+
+    /// <summary>
+    /// 解析镜像站目录索引，拼出可下载版本的 <see cref="RemoteFfmpegRelease"/> 列表。
+    /// 目录结构：{root}{大版本}.x/{版本}/win64/jellyfin-ffmpeg_{版本}-portable_win64.zip
+    /// 索引页里没有文件大小字段，故 AssetSizeBytes 记 0（调用方按「未知」处理）。
+    /// </summary>
+    private async Task<List<RemoteFfmpegRelease>> FetchMirrorReleasesAsync(CancellationToken ct)
+    {
+        var rootHtml = await GetTextAsync(FfmpegMirrorRootCn, ct).ConfigureAwait(false);
+
+        // 只看最近 3 个大版本，避免无谓的往返
+        var majors = ParseIndexEntries(rootHtml)
+            .Where(e => e.IsDir && Regex.IsMatch(e.Name, @"^\d+\.x/$"))
+            .Select(e => (Name: e.Name, Major: int.Parse(e.Name.Split('.')[0])))
+            .OrderByDescending(x => x.Major)
+            .Take(3)
+            .ToList();
+
+        // 1) 先汇总候选版本（只解析大版本目录，1 次请求 / 大版本）
+        var candidates = new List<(string MajorDir, int Major, string Tag, DateTimeOffset Date)>();
+        foreach (var (name, major) in majors)
+        {
+            var html = await GetTextAsync(FfmpegMirrorRootCn + name, ct).ConfigureAwait(false);
+
+            foreach (var entry in ParseIndexEntries(html))
+            {
+                if (!entry.IsDir)
+                {
+                    continue;
+                }
+
+                var tag = entry.Name.TrimEnd('/');
+                if (Regex.IsMatch(tag, @"^\d+\.\d+\.\d+-\d+$"))
+                {
+                    candidates.Add((name, major, tag, entry.Date));
+                }
+            }
+        }
+
+        // 与 GitHub 一致：新版本在前
+        candidates.Sort((a, b) => CompareVersions(b.Tag, a.Tag));
+
+        // 2) 再逐个确认压缩包真实文件名。这里不能按规则硬拼——
+        //    命名随版本演进过：旧版是 jellyfin-ffmpeg_{v}-portable_win64.zip，
+        //    新版（7.1.4+、8.x）只发 jellyfin-ffmpeg_{v}_portable_win64-clang-gpl.zip。
+        //    硬拼会在新版上 404，所以只对最新的若干个版本列一次目录。
+        var result = new List<RemoteFfmpegRelease>();
+        foreach (var c in candidates.Take(MirrorProbeLimit))
+        {
+            var dirUrl = $"{FfmpegMirrorRootCn}{c.MajorDir}{c.Tag}/win64/";
+            try
+            {
+                var dirHtml = await GetTextAsync(dirUrl, ct).ConfigureAwait(false);
+                var zip = FindMirrorZipUrl(dirHtml);
+                if (zip is null)
+                {
+                    continue; // 该版本在镜像上还没有 win64 包
+                }
+
+                // 8.x 在 GitHub 上标为 prerelease，镜像侧沿用同一语义
+                result.Add(new RemoteFfmpegRelease(c.Tag, dirUrl + zip, c.Date, 0, c.Major >= 8));
+            }
+            catch
+            {
+                // 单个版本探测失败不影响其余版本
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 在版本目录的索引里找 win64 便携包文件名。
+    /// 选取规则与 GitHub 侧一致：名字含 portable_win64 且以 .zip 结尾的第一个。
+    /// 目录按字典序排列时，旧命名（连字符）排在新命名（下划线）之前，
+    /// 因此两种命名同时存在时优先取体积更小的非 clang 包。
+    /// </summary>
+    private static string? FindMirrorZipUrl(string dirHtml)
+    {
+        foreach (var entry in ParseIndexEntries(dirHtml))
+        {
+            if (!entry.IsDir
+                && entry.Name.Contains("portable_win64", StringComparison.OrdinalIgnoreCase)
+                && entry.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return entry.Name;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>解析目录索引页里的链接（名称 / 是否目录 / 修改时间）。</summary>
+    private static List<(string Name, bool IsDir, DateTimeOffset Date)> ParseIndexEntries(string html)
+    {
+        var list = new List<(string, bool, DateTimeOffset)>();
+
+        foreach (Match m in Regex.Matches(html,
+                     "<a\\s+href=\"([^\"]+)\"[^>]*>([^<]*)</a>", RegexOptions.IgnoreCase))
+        {
+            var href = m.Groups[1].Value.Trim();
+
+            // 排序链接（?C=N&O=A）、父目录（../）、外链、绝对路径一律跳过
+            if (href.Length == 0 || href.StartsWith('?') || href.StartsWith('#')
+                || href.StartsWith('/') || href.StartsWith("..") || href.Contains("://"))
+            {
+                continue;
+            }
+
+            var name = Uri.UnescapeDataString(href);
+            if (name.StartsWith("./"))
+            {
+                name = name[2..];
+            }
+
+            // 修改时间在同一行靠后的文本里（形如 2026-Sep-06 07:39）
+            var from = m.Index + m.Length;
+            var tail = html.Substring(from, Math.Min(200, html.Length - from));
+            TryParseIndexDate(tail, out var date);
+
+            list.Add((name, name.EndsWith('/'), date));
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// 解析索引页里的日期文本。镜像站用 nginx 风格「2026-Sep-06 07:39」，
+    /// 这里同时兼容 ISO 风格「2026-09-06 07:39」。
+    /// <para>
+    /// 必须用 InvariantCulture：月份缩写是英文，在中文区域下默认解析会失败。
+    /// </para>
+    /// </summary>
+    private static bool TryParseIndexDate(string text, out DateTimeOffset result)
+    {
+        result = DateTimeOffset.UnixEpoch;
+
+        var iso = Regex.Match(text, @"(\d{4})-(\d{2})-(\d{2})[ T]+(\d{2}:\d{2})");
+        var nginx = Regex.Match(text, @"(\d{4})-([A-Za-z]{3})-(\d{1,2})[ T]+(\d{2}:\d{2})");
+        var m = iso.Success ? iso : nginx;
+        if (!m.Success)
+        {
+            return false;
+        }
+
+        var stamp = $"{m.Groups[1].Value}-{m.Groups[2].Value}-{m.Groups[3].Value} {m.Groups[4].Value}";
+        return DateTimeOffset.TryParse(stamp, CultureInfo.InvariantCulture, DateTimeStyles.None, out result);
+    }
+
     /// <inheritdoc/>
     public async Task<AppReleaseInfo> GetLatestAppReleaseAsync(UpdateSource source = UpdateSource.GitHub, CancellationToken ct = default)
     {
-        var api = source == UpdateSource.Gitee ? AppRepoLatestApiGitee : AppRepoLatestApiGithub;
+        var api = source == UpdateSource.CN ? AppRepoLatestApiCnGitee : AppRepoLatestApiGithub;
         using var doc = await GetReleaseJsonAsync(api, ct).ConfigureAwait(false);
 
         // tag 形如 "v1.2.0" → 版本 "1.2.0"
@@ -375,6 +573,19 @@ public sealed partial class UpdateService : IUpdateService
 
         var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         return JsonDocument.Parse(json);
+    }
+
+    /// <summary>取回纯文本响应（用于解析镜像站的目录索引页）。</summary>
+    private async Task<string> GetTextAsync(string url, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.UserAgent.ParseAdd($"MarukoBox/{GetAppVersionStatic()}");
+
+        using var response = await _http
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
     }
 
     // ---------- 版本比较 ----------

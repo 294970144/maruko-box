@@ -15,23 +15,36 @@
         <conv:InvertBoolToVisibility x:Key="InvertBoolToVisibility" />
         <conv:UserLevelToVisibility x:Key="UserLevelToVisibility" />
         <conv:UserLevelEqualsToVisibility x:Key="UserLevelEqualsToVisibility" />
+
+        <!-- 拖放提示遮罩：模糊其背后的页面内容（Backdrop），再叠一层暗色 tint -->
+        <AcrylicBrush x:Key="DropOverlayBrush"
+                      TintColor="#80000000"
+                      TintOpacity="0.6"
+                      FallbackColor="#D9000000" />
     </Page.Resources>
 
     <Grid ColumnSpacing="16" Padding="24">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300" />
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="320" />
+            <!-- 三列都按星号分配：窗口变小时左右侧栏与中列一起收缩，
+                 各自有 MinWidth 兜底；MaxWidth 保证大窗口下侧栏不会被拉得过宽。 -->
+            <ColumnDefinition Width="2*" MinWidth="200" MaxWidth="320" />
+            <ColumnDefinition Width="5.6*" MinWidth="300" />
+            <ColumnDefinition Width="2.1*" MinWidth="220" MaxWidth="340" />
         </Grid.ColumnDefinitions>
 
-        <!-- ============ 左：队列 ============ -->
-        <StackPanel Grid.Column="0" Spacing="12">
+        <!-- ============ 左：队列（整栏都是拖放区） ============ -->
+        <StackPanel x:Name="LeftSidebar" Grid.Column="0" Spacing="12"
+                    Background="Transparent"
+                    AllowDrop="True"
+                    DragEnter="Sidebar_DragEnter"
+                    DragOver="Sidebar_DragOver"
+                    DragLeave="Sidebar_DragLeave"
+                    Drop="Sidebar_Drop">
             <TextBlock Text="视频" Style="{StaticResource TitleTextBlockStyle}" />
 
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16"
-                    AllowDrop="True" DragOver="DropZone_DragOver" Drop="DropZone_Drop">
+                    BorderThickness="1" CornerRadius="8" Padding="16">
                 <StackPanel Spacing="8" HorizontalAlignment="Center">
                     <FontIcon Glyph="&#xE8B6;" FontSize="32" Opacity="0.5" />
                     <TextBlock Text="拖拽视频到此处" HorizontalAlignment="Center" Opacity="0.8" />
@@ -128,8 +141,6 @@
                             <TextBlock Text="质量 (CQP，0=无损 51=最差)" Opacity="0.8" />
                             <NumberBox Value="{x:Bind ViewModel.Settings.Quality, Mode=TwoWay}"
                                        Minimum="0" Maximum="51" SmallChange="1" SpinButtonPlacementMode="Compact" />
-                            <TextBlock Text="GPU 使用 CQP 恒定质量（等价于 CRF）。若要使用 CRF，请在上方编码器选择 x264 / x265（CPU）。"
-                                       FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
                         </StackPanel>
 
                         <!-- 码率类（高手及以上） -->
@@ -357,5 +368,23 @@
                 </StackPanel>
             </Border>
         </StackPanel>
+
+        <!-- ============ 拖放提示遮罩：覆盖整个视频页 ============ -->
+        <!-- IsHitTestVisible=False 是关键：遮罩不能拦截拖放事件，
+             否则指针一进入遮罩就会触发 DragLeave，导致提示闪烁 / 放置失效。 -->
+        <Grid x:Name="DropOverlay"
+              Grid.ColumnSpan="3"
+              Visibility="Collapsed"
+              IsHitTestVisible="False"
+              Background="{StaticResource DropOverlayBrush}">
+            <StackPanel Spacing="10" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <FontIcon Glyph="&#xE896;" FontSize="48" Foreground="White"
+                          HorizontalAlignment="Center" Opacity="0.9" />
+                <TextBlock Text="松开即可添加文件" FontSize="24" FontWeight="SemiBold"
+                           Foreground="White" HorizontalAlignment="Center" />
+                <TextBlock Text="支持视频、音频、图片等常见文件类型" FontSize="13"
+                           Foreground="White" Opacity="0.85" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Page>
