@@ -1178,17 +1178,13 @@ public class FfmpegService : IFfmpegService
                 break;
 
             case "out_time_us":
+            case "out_time_ms":
+                // 注意：ffmpeg 的 out_time_ms 键名虽含 "ms"，实际输出的值是微秒
+                // （ffmpeg 历史遗留问题，与 out_time_us 相同）。若按毫秒解析，
+                // Processed 会被放大 1000 倍，进度百分比瞬间爆表并永远卡在 100。
                 if (long.TryParse(value, out var us))
                 {
                     current.Processed = TimeSpan.FromMicroseconds(us);
-                    UpdatePercent(current, totalDuration);
-                }
-                break;
-
-            case "out_time_ms":
-                if (long.TryParse(value, out var ms))
-                {
-                    current.Processed = TimeSpan.FromMilliseconds(ms);
                     UpdatePercent(current, totalDuration);
                 }
                 break;
