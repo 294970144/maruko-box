@@ -14,6 +14,8 @@
         <conv:BoolToVisibility x:Key="BoolToVisibility" />
         <conv:InvertBool x:Key="InvertBool" />
         <conv:InvertBoolToVisibility x:Key="InvertBoolToVisibility" />
+        <conv:PercentToText x:Key="PercentToText" />
+        <conv:TimeSpanToClock x:Key="TimeSpanToClock" />
     </Page.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -214,7 +216,7 @@
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="码率" Opacity="0.7" />
                         <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.Progress.BitrateKbps, Mode=OneWay}" HorizontalTextAlignment="Right" />
                         <TextBlock Grid.Row="3" Grid.Column="0" Text="剩余" Opacity="0.7" />
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind ViewModel.Progress.Remaining, Mode=OneWay}" HorizontalTextAlignment="Right" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind ViewModel.Progress.Remaining, Mode=OneWay, Converter={StaticResource TimeSpanToClock}}" HorizontalTextAlignment="Right" />
                     </Grid>
 
                     <Button Content="取消" HorizontalAlignment="Stretch"

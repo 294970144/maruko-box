@@ -179,3 +179,53 @@ public sealed class UserLevelEqualsToVisibility : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, string language)
         => throw new NotImplementedException();
 }
+
+/// <summary>
+/// 将进度百分比（double）格式化为保留 1~2 位小数的文本。
+/// 直接绑定 double 会输出完整浮点尾数（如 8.498747012159212），此处收口为 8.5 / 8.49。
+/// </summary>
+public sealed class PercentToText : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var percent = value switch
+        {
+            double d => d,
+            float f => f,
+            int i => i,
+            long l => l,
+            _ => 0d
+        };
+
+        return percent.ToString("0.0#", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
+/// 将时长（TimeSpan）格式化为时:分:秒（HH:mm:ss）文本。
+/// TimeSpan 默认 ToString 会带 7 位小数秒（如 00:04:24.1366670），剩余时间只需精确到秒。
+/// </summary>
+public sealed class TimeSpanToClock : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        if (value is not TimeSpan t)
+        {
+            return "00:00:00";
+        }
+
+        if (t < TimeSpan.Zero)
+        {
+            t = TimeSpan.Zero;
+        }
+
+        var hours = (int)t.TotalHours;
+        return string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:D2}:{1:D2}:{2:D2}", hours, t.Minutes, t.Seconds);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}
