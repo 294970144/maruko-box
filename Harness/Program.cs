@@ -67,7 +67,7 @@ Directory.CreateDirectory(Path.GetDirectoryName(src)!);
 Console.WriteLine("=== 生成测试源 ===");
 Console.Out.Flush();
 var gen = Process.Start(new ProcessStartInfo(ffmpeg,
-    $"-y -f lavfi -i \"testsrc=duration=3:size=1280x720:rate=30\" -c:v libx264 -pix_fmt yuv420p \"{src}\"")
+    $"-y -f lavfi -i \"testsrc=duration=20:size=1280x720:rate=30\" -c:v libx264 -pix_fmt yuv420p \"{src}\"")
 {
     UseShellExecute = false,
     CreateNoWindow = true

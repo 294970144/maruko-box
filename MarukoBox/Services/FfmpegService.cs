@@ -489,6 +489,11 @@ public class FfmpegService : IFfmpegService
         // 改用 long + Volatile 读写，读取时再转 TimeSpan。
         long durationTicks = 0;
 
+        // GPU 编码器（NVENC 等）在 -progress 输出里 fps 恒为 0.00（ffmpeg 自身行为，
+        // 与解析无关）。这里记录墙钟耗时，供 ParseProgressLine 在 fps<=0 时用
+        // 「已编码帧数 ÷ 已耗时」兜底，避免进度面板 FPS 一直显示 0。
+        var wallClock = Stopwatch.StartNew();
+
         // ---------- stderr: 日志 + 总时长 ----------
         // 此回调运行在线程池线程，任何未捕获异常都应就地吞掉，避免终止进程。
         process.ErrorDataReceived += (_, e) =>
@@ -555,7 +560,11 @@ public class FfmpegService : IFfmpegService
                         continue;
                     }
 
-                    ParseProgressLine(line, current, new TimeSpan(Volatile.Read(ref durationTicks)));
+                    ParseProgressLine(
+                        line,
+                        current,
+                        new TimeSpan(Volatile.Read(ref durationTicks)),
+                        wallClock.Elapsed);
                     progress.Report(current);
                 }
             }
@@ -1150,7 +1159,11 @@ public class FfmpegService : IFfmpegService
     /// <summary>
     /// 解析 <c>-progress</c> 输出的一行（形如 "out_time_us=12345678"）。
     /// </summary>
-    private static void ParseProgressLine(string line, EncodeProgress current, TimeSpan totalDuration)
+    private static void ParseProgressLine(
+        string line,
+        EncodeProgress current,
+        TimeSpan totalDuration,
+        TimeSpan elapsed = default)
     {
         var idx = line.IndexOf('=');
         if (idx <= 0)
@@ -1197,6 +1210,13 @@ public class FfmpegService : IFfmpegService
 
             case "progress":
                 current.StatusMessage = value == "end" ? "正在收尾…" : "正在编码…";
+
+                // 一个进度块到此结束。GPU 编码器不回报 fps（恒 0），
+                // 用「已编码帧数 ÷ 已耗时」兜底，让 FPS 显示有实际意义。
+                if (current.Fps <= 0 && current.CurrentFrame > 0 && elapsed.TotalSeconds > 0.5)
+                {
+                    current.Fps = current.CurrentFrame / elapsed.TotalSeconds;
+                }
                 break;
         }
     }
