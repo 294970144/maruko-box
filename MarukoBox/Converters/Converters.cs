@@ -181,10 +181,12 @@ public sealed class UserLevelEqualsToVisibility : IValueConverter
 }
 
 /// <summary>
-/// 将进度百分比（double）格式化为保留 1~2 位小数的文本。
-/// 直接绑定 double 会输出完整浮点尾数（如 8.498747012159212），此处收口为 8.5 / 8.49。
+/// 将数值（进度 / 速度 / 帧率 / 码率等 double）格式化为保留 1~2 位小数的文本。
+/// 直接绑定 double 会输出完整浮点尾数（如进度 5.886190806110784），此处收口为 5.9 / 5.89。
+/// 注意：x:Bind 同时指定 Converter 与 FallbackValue 时，Converter 会被编译器忽略（实测 2026-09-18），
+/// 因此使用本转换器的绑定一律不要写 FallbackValue。
 /// </summary>
-public sealed class PercentToText : IValueConverter
+public sealed class ShortNumber : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
