@@ -1,11 +1,10 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using MarukoBox.Helpers;
 using MarukoBox.Models;
 using MarukoBox.ViewModels;
 using Windows.ApplicationModel.DataTransfer;
-using Windows.Storage;
-using Windows.Storage.Pickers;
 
 namespace MarukoBox.Pages;
 
@@ -24,14 +23,8 @@ public sealed partial class VideoPage : Page
 
     private async void AddFiles_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker
-        {
-            ViewMode = PickerViewMode.List,
-            SuggestedStartLocation = PickerLocationId.VideosLibrary
-        };
-        picker.FileTypeFilter.Add("*");
-
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, App.WindowHandle);
+        // 与拖放共用同一份白名单：不要退回 FileTypeFilter.Add("*")
+        var picker = FileDropHelper.CreatePicker(FileDropHelper.Media);
 
         var files = await picker.PickMultipleFilesAsync();
         if (files is not null && files.Count > 0)
@@ -45,7 +38,7 @@ public sealed partial class VideoPage : Page
     private void Sidebar_DragEnter(object sender, DragEventArgs e)
     {
         // 只认文件拖入；拖文本 / 链接进来不弹提示，也不接受放置
-        if (e.DataView is null || !e.DataView.Contains(StandardDataFormats.StorageItems))
+        if (!FileDropHelper.HasFiles(e))
         {
             return;
         }
@@ -62,7 +55,7 @@ public sealed partial class VideoPage : Page
 
     private void Sidebar_DragOver(object sender, DragEventArgs e)
     {
-        if (e.DataView is not null && e.DataView.Contains(StandardDataFormats.StorageItems))
+        if (FileDropHelper.HasFiles(e))
         {
             e.AcceptedOperation = DataPackageOperation.Copy;
         }
@@ -77,21 +70,20 @@ public sealed partial class VideoPage : Page
     {
         DropOverlay.Visibility = Visibility.Collapsed;
 
-        if (e.DataView is null)
+        if (!FileDropHelper.HasFiles(e))
         {
             return;
         }
 
-        var items = await e.DataView.GetStorageItemsAsync();
-        var paths = items
-            .OfType<StorageFile>()
-            .Select(f => f.Path)
-            .ToList();
+        var paths = await FileDropHelper.GetPathsAsync(e);
+        var (accepted, rejected) = FileDropHelper.Split(paths, FileDropHelper.Media);
 
-        if (paths.Count > 0)
+        if (accepted.Count > 0)
         {
-            ViewModel.AddFiles(paths);
+            ViewModel.AddFiles(accepted);
         }
+
+        await FileDropHelper.NotifyRejectedAsync(XamlRoot, rejected.Count, FileDropHelper.Media);
     }
 
     private void RemoveItem_Click(object sender, RoutedEventArgs e)

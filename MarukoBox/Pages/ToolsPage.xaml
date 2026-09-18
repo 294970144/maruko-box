@@ -24,7 +24,13 @@
             </StackPanel>
 
             <!-- 选择 + 查看 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <Border x:Name="InputCard"
+                    AllowDrop="True"
+                    DragEnter="InputCard_DragEnter"
+                    DragOver="InputCard_DragOver"
+                    DragLeave="InputCard_DragLeave"
+                    Drop="InputCard_Drop"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1" CornerRadius="8" Padding="16">
                 <StackPanel Spacing="12">
@@ -96,7 +102,7 @@
                         </ListView.ItemTemplate>
                     </ListView>
 
-                    <TextBlock Text="尚未分析文件，请选择媒体文件后点击「查看媒体信息」"
+                    <TextBlock Text="尚未分析文件，拖拽媒体文件到上方卡片，或选择文件后点击「查看媒体信息」"
                                Opacity="0.6"
                                Visibility="{x:Bind ViewModel.HasInfo, Mode=OneWay, Converter={StaticResource InvertBoolToVisibility}}" />
                 </StackPanel>
