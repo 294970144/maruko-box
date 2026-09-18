@@ -44,10 +44,16 @@
                 </StackPanel>
             </Border>
 
-            <!-- 抽取区 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <!-- 抽取区（拖放区，只接受视频） -->
+            <Border x:Name="ExtractCard"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    AllowDrop="True"
+                    DragEnter="ExtractCard_DragEnter"
+                    DragOver="ExtractCard_DragOver"
+                    DragLeave="ExtractCard_DragLeave"
+                    Drop="ExtractCard_Drop">
                 <StackPanel Spacing="12">
                     <TextBlock Text="① 抽取字幕流" Style="{StaticResource BodyStrongTextBlockStyle}" />
 
@@ -119,10 +125,16 @@
                 </StackPanel>
             </Border>
 
-            <!-- 嵌入区 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <!-- 嵌入区（拖放区：拖视频填入「视频文件」，拖字幕填入「字幕文件」） -->
+            <Border x:Name="EmbedCard"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    AllowDrop="True"
+                    DragEnter="EmbedCard_DragEnter"
+                    DragOver="EmbedCard_DragOver"
+                    DragLeave="EmbedCard_DragLeave"
+                    Drop="EmbedCard_Drop">
                 <StackPanel Spacing="12">
                     <TextBlock Text="② 嵌入字幕" Style="{StaticResource BodyStrongTextBlockStyle}" />
 
@@ -156,10 +168,16 @@
                 </StackPanel>
             </Border>
 
-            <!-- 转换区 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <!-- 转换区（拖放区，只接受字幕） -->
+            <Border x:Name="ConvertCard"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    AllowDrop="True"
+                    DragEnter="ConvertCard_DragEnter"
+                    DragOver="ConvertCard_DragOver"
+                    DragLeave="ConvertCard_DragLeave"
+                    Drop="ConvertCard_Drop">
                 <StackPanel Spacing="12">
                     <TextBlock Text="③ 字幕格式转换" Style="{StaticResource BodyStrongTextBlockStyle}" />
 

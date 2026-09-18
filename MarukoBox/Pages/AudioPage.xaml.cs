@@ -1,14 +1,16 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using MarukoBox.Helpers;
 using MarukoBox.Models;
 using MarukoBox.ViewModels;
-using Windows.Storage;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage.Pickers;
 
 namespace MarukoBox.Pages;
 
 /// <summary>
 /// 音频页：批量音频转码。文件选择需要 HWND 初始化 picker。
+/// 支持把文件直接拖到「音频队列」卡片上加入队列，并与文件选择器共用同一份格式白名单。
 /// </summary>
 public sealed partial class AudioPage : Page
 {
@@ -21,14 +23,8 @@ public sealed partial class AudioPage : Page
 
     private async void AddFiles_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker
-        {
-            ViewMode = PickerViewMode.List,
-            SuggestedStartLocation = PickerLocationId.MusicLibrary
-        };
-        picker.FileTypeFilter.Add("*");
-
-        WinRT.Interop.InitializeWithWindow.Initialize(picker, App.WindowHandle);
+        // 视频容器也可以作为音频来源（抽出音轨后再编码），这里用 Media 而非纯音频
+        var picker = FileDropHelper.CreatePicker(FileDropHelper.Media, PickerLocationId.MusicLibrary);
 
         var files = await picker.PickMultipleFilesAsync();
         if (files is not null && files.Count > 0)
@@ -43,5 +39,57 @@ public sealed partial class AudioPage : Page
         {
             ViewModel.RemoveItemCommand.Execute(item);
         }
+    }
+
+    // ---------- 拖放：整张「音频队列」卡片都是放置区 ----------
+
+    private void QueueCard_DragEnter(object sender, DragEventArgs e)
+    {
+        if (!FileDropHelper.HasFiles(e))
+        {
+            return;
+        }
+
+        e.AcceptedOperation = DataPackageOperation.Copy;
+        if (e.DragUIOverride is not null)
+        {
+            e.DragUIOverride.Caption = "松开即可加入队列";
+            e.DragUIOverride.IsCaptionVisible = true;
+        }
+
+        FileDropHelper.Highlight(QueueCard);
+    }
+
+    private void QueueCard_DragOver(object sender, DragEventArgs e)
+    {
+        if (FileDropHelper.HasFiles(e))
+        {
+            e.AcceptedOperation = DataPackageOperation.Copy;
+        }
+    }
+
+    private void QueueCard_DragLeave(object sender, DragEventArgs e)
+    {
+        FileDropHelper.Restore(QueueCard);
+    }
+
+    private async void QueueCard_Drop(object sender, DragEventArgs e)
+    {
+        FileDropHelper.Restore(QueueCard);
+
+        if (!FileDropHelper.HasFiles(e))
+        {
+            return;
+        }
+
+        var paths = await FileDropHelper.GetPathsAsync(e);
+        var (accepted, rejected) = FileDropHelper.Split(paths, FileDropHelper.Media);
+
+        if (accepted.Count > 0)
+        {
+            ViewModel.AddFilesCommand.Execute(accepted);
+        }
+
+        await FileDropHelper.NotifyRejectedAsync(XamlRoot, rejected.Count, FileDropHelper.Media);
     }
 }

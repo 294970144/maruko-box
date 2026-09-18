@@ -22,10 +22,16 @@
                 <TextBlock Text="视频抽帧 · 图片格式转换" Opacity="0.7" />
             </StackPanel>
 
-            <!-- 视频抽帧 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <!-- 视频抽帧（整张卡片都是拖放区，只接受视频） -->
+            <Border x:Name="FrameCard"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    AllowDrop="True"
+                    DragEnter="FrameCard_DragEnter"
+                    DragOver="FrameCard_DragOver"
+                    DragLeave="FrameCard_DragLeave"
+                    Drop="FrameCard_Drop">
                 <StackPanel Spacing="12">
                     <TextBlock Text="视频抽帧" Style="{StaticResource BodyStrongTextBlockStyle}" />
 
@@ -111,10 +117,16 @@
                 </StackPanel>
             </Border>
 
-            <!-- 图片转码 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <!-- 图片转码（拖放区，只接受图片） -->
+            <Border x:Name="ConvertCard"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    AllowDrop="True"
+                    DragEnter="ConvertCard_DragEnter"
+                    DragOver="ConvertCard_DragOver"
+                    DragLeave="ConvertCard_DragLeave"
+                    Drop="ConvertCard_Drop">
                 <StackPanel Spacing="12">
                     <TextBlock Text="图片转码" Style="{StaticResource BodyStrongTextBlockStyle}" />
 

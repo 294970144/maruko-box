@@ -95,10 +95,16 @@
                 </StackPanel>
             </Border>
 
-            <!-- 队列 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <!-- 队列（整张卡片都是拖放区） -->
+            <Border x:Name="QueueCard"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    AllowDrop="True"
+                    DragEnter="QueueCard_DragEnter"
+                    DragOver="QueueCard_DragOver"
+                    DragLeave="QueueCard_DragLeave"
+                    Drop="QueueCard_Drop">
                 <StackPanel Spacing="12">
                     <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
@@ -140,7 +146,7 @@
                         </ListView.ItemTemplate>
                     </ListView>
 
-                    <TextBlock Text="队列为空，请点击「添加文件」"
+                    <TextBlock Text="队列为空，拖拽音频 / 视频文件到此处，或点击「添加文件」"
                                Opacity="0.6"
                                Visibility="{x:Bind ViewModel.HasQueue, Mode=OneWay, Converter={StaticResource InvertBoolToVisibility}}" />
                 </StackPanel>

@@ -58,10 +58,16 @@
                 </StackPanel>
             </Border>
 
-            <!-- 轨道列表 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <!-- 轨道列表（整张卡片都是拖放区；拖进来的文件按扩展名自动分流到视频 / 音频 / 字幕） -->
+            <Border x:Name="InputsCard"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    AllowDrop="True"
+                    DragEnter="InputsCard_DragEnter"
+                    DragOver="InputsCard_DragOver"
+                    DragLeave="InputsCard_DragLeave"
+                    Drop="InputsCard_Drop">
                 <StackPanel Spacing="12">
                     <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
@@ -97,7 +103,7 @@
                         </ListView.ItemTemplate>
                     </ListView>
 
-                    <TextBlock Text="尚未添加输入文件，请使用下方按钮添加视频 / 音频 / 字幕"
+                    <TextBlock Text="尚未添加输入文件，拖拽文件到此处，或使用下方按钮添加视频 / 音频 / 字幕"
                                Opacity="0.6"
                                Visibility="{x:Bind ViewModel.HasInputs, Mode=OneWay, Converter={StaticResource InvertBoolToVisibility}}" />
 

@@ -25,10 +25,16 @@
                 <TextBlock Text="从容器中分离视频 / 音频 / 字幕流（无损 -c copy）" Opacity="0.7" />
             </StackPanel>
 
-            <!-- 源文件 / 输出目录 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <!-- 源文件 / 输出目录（整张卡片都是拖放区，拖入的文件自动填入「源文件」） -->
+            <Border x:Name="SourceCard"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    AllowDrop="True"
+                    DragEnter="SourceCard_DragEnter"
+                    DragOver="SourceCard_DragOver"
+                    DragLeave="SourceCard_DragLeave"
+                    Drop="SourceCard_Drop">
                 <StackPanel Spacing="12">
                     <StackPanel Spacing="6">
                         <TextBlock Text="源文件" Opacity="0.8" />
