@@ -14,4 +14,7 @@
 - 文件夹选择器仍为全类型，这是 WinUI 的 `FolderPicker` 硬性要求，与文件白名单无关。
 
 ## 下载
+- **GitHub**：https://github.com/294970144/maruko-box/releases/tag/v1.6.0
+- **Gitee**：https://gitee.com/zhang-lin701442/maruko-box/releases/tag/v1.6.0
+
 `MarukoBoxSetup-Inno_1.6.0.exe` · 当前用户安装（无需 UAC）· 内置 ffmpeg 7.1.1-5
