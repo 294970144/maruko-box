@@ -472,6 +472,10 @@ public partial class TrimViewModel : ObservableObject
 
             var ok = await _ffmpeg.TrimAsync(FfmpegPath, request, gpu, prog, _cts.Token);
             StatusText = ok ? $"裁剪完成 → {OutputPath}" : "裁剪失败，详见日志";
+            if (ok)
+            {
+                LastOutputPath = OutputPath;
+            }
         }
         catch (OperationCanceledException)
         {
@@ -540,4 +544,13 @@ public partial class TrimViewModel : ObservableObject
         PreviewFailed = true;
         StatusText = "预览画面不可用（系统解码器不支持该文件），仍可使用时间轴与缩略图进行裁剪";
     }
+
+    /// <summary>最近一次成功产出的裁剪文件，供「打开输出文件夹」定位使用。</summary>
+    [ObservableProperty]
+    public partial string LastOutputPath { get; set; } = string.Empty;
+
+    /// <summary>在文件管理器中定位裁剪结果；无产出记录时打开其所在目录。</summary>
+    [RelayCommand]
+    private void OpenOutputFolder() =>
+        ShellHelper.OpenOutputLocation(LastOutputPath, Path.GetDirectoryName(OutputPath), InputPath);
 }

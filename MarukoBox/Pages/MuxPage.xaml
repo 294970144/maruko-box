@@ -48,10 +48,12 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBox Grid.Column="0" Text="{x:Bind ViewModel.OutputPath, Mode=TwoWay}"
                                          PlaceholderText="留空则自动生成到源文件同目录" />
                                 <Button Grid.Column="1" Content="浏览…" Click="BrowseOutput_Click" />
+                                <Button Grid.Column="2" Content="打开" Command="{x:Bind ViewModel.OpenOutputFolderCommand, Mode=OneWay}" />
                             </Grid>
                         </StackPanel>
                     </Grid>

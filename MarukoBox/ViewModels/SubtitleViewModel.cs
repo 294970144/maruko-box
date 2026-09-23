@@ -195,6 +195,10 @@ public partial class SubtitleViewModel : ObservableObject
         {
             var ok = await _ffmpeg.EmbedSubtitleAsync(FfmpegPath, EmbedVideo, EmbedSubtitle, outVideo, MakeProgress(), _cts.Token);
             StatusText = ok ? $"嵌入完成 → {outVideo}" : "嵌入失败，详见日志";
+            if (ok)
+            {
+                LastOutputPath = outVideo;
+            }
         }
         catch (Exception ex)
         {
@@ -240,6 +244,10 @@ public partial class SubtitleViewModel : ObservableObject
         {
             var ok = await _ffmpeg.ConvertSubtitleAsync(FfmpegPath, ConvertInput, outSub, MakeProgress(), _cts.Token);
             StatusText = ok ? $"转换完成 → {outSub}" : "转换失败，详见日志";
+            if (ok)
+            {
+                LastOutputPath = outSub;
+            }
         }
         catch (Exception ex)
         {
@@ -267,6 +275,16 @@ public partial class SubtitleViewModel : ObservableObject
             OutputDir = dir;
         }
     }
+
+    /// <summary>最近一次成功产出的文件，供「打开输出文件夹」定位使用。</summary>
+    [ObservableProperty]
+    public partial string LastOutputPath { get; set; } = string.Empty;
+
+    /// <summary>在文件管理器中定位输出文件；无产出记录时打开输出目录。</summary>
+    [RelayCommand]
+    private void OpenOutputFolder() =>
+        ShellHelper.OpenOutputLocation(LastOutputPath, OutputDir,
+            !string.IsNullOrEmpty(EmbedVideo) ? EmbedVideo : ConvertInput);
 
     [RelayCommand]
     private void SelectAll()

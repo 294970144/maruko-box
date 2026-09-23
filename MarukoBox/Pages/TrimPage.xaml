@@ -22,7 +22,7 @@
 
             <StackPanel>
                 <TextBlock Text="裁剪" Style="{StaticResource TitleTextBlockStyle}" />
-                <TextBlock Text="拖动时间轴两端的圆点选择起止时间，默认无损快切（秒级完成）"
+                <TextBlock Text="拖动时间轴两端圆点选定起止时间"
                            Opacity="0.7" />
             </StackPanel>
 
@@ -153,6 +153,7 @@
                         <TextBox Grid.Column="0" Text="{x:Bind ViewModel.OutputPath, Mode=TwoWay}"
                                  PlaceholderText="输出路径（默认与源文件同目录）" />
                         <Button Grid.Column="1" Content="另存为…" Click="BrowseOutput_Click" />
+                        <Button Grid.Column="2" Content="打开" Command="{x:Bind ViewModel.OpenOutputFolderCommand, Mode=OneWay}" />
                     </Grid>
 
                     <ToggleSwitch x:Name="FastToggle"

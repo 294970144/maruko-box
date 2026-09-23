@@ -158,6 +158,10 @@ public partial class MuxViewModel : ObservableObject
 
             var ok = await _ffmpeg.RemuxAsync(FfmpegPath, inputs, SelectedContainer, OutputPath, prog, _cts.Token);
             StatusText = ok ? $"封装完成 → {OutputPath}" : "封装失败，详见日志";
+            if (ok)
+            {
+                LastOutputPath = OutputPath;
+            }
         }
         catch (OperationCanceledException)
         {
@@ -186,4 +190,14 @@ public partial class MuxViewModel : ObservableObject
         "webm" => ".webm",
         _ => ".mp4"
     };
+
+    /// <summary>最近一次成功产出的封装文件，供「打开输出文件夹」定位使用。</summary>
+    [ObservableProperty]
+    public partial string LastOutputPath { get; set; } = string.Empty;
+
+    /// <summary>在文件管理器中定位封装结果；无产出记录时打开其所在目录。</summary>
+    [RelayCommand]
+    private void OpenOutputFolder() =>
+        ShellHelper.OpenOutputLocation(LastOutputPath, Path.GetDirectoryName(OutputPath),
+            Inputs.FirstOrDefault()?.FilePath);
 }

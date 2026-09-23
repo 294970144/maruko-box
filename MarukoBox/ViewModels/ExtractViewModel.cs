@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MarukoBox.Helpers;
 using MarukoBox.Models;
 using MarukoBox.Services;
 
@@ -183,4 +184,13 @@ public partial class ExtractViewModel : ObservableObject
     {
         foreach (var s in Streams) s.IsSelected = false;
     }
+
+    /// <summary>打开输出目录（抽取可能产出多条轨道，按目录定位）。</summary>
+    [RelayCommand]
+    private void OpenOutputFolder() =>
+        ShellHelper.OpenOutputLocation(LastOutputPath, OutputDir, SourcePath);
+
+    /// <summary>最近一次成功产出的目录；多文件输出时不记录单文件，命令退化为打开目录。</summary>
+    [ObservableProperty]
+    public partial string LastOutputPath { get; set; } = string.Empty;
 }

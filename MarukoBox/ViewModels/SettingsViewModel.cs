@@ -284,6 +284,16 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
+    /// <summary>打开默认输出目录；未设置时打开软件数据目录。</summary>
+    [RelayCommand]
+    private void OpenOutputFolder()
+    {
+        var dir = string.IsNullOrWhiteSpace(OutputDirectory)
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MarukoBox")
+            : OutputDirectory;
+        ShellHelper.OpenFolder(dir);
+    }
+
     /// <summary>
     /// 保存配置到磁盘。若本次保存涉及「主题」或「用户级别」与上次保存时不同，
     /// 则弹"立即重启？"对话框，主按钮触发 <see cref="RestartApp"/>。

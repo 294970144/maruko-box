@@ -171,6 +171,10 @@ public partial class ImageViewModel : ObservableObject
         {
             var ok = await _ffmpeg.ConvertImageAsync(FfmpegPath, InputImage, outPath, SelectedImageFormat, MakeProgress(), _cts.Token);
             StatusText = ok ? $"转码完成 → {outPath}" : "转码失败，详见日志";
+            if (ok)
+            {
+                LastOutputPath = outPath;
+            }
         }
         catch (Exception ex)
         {
@@ -205,4 +209,13 @@ public partial class ImageViewModel : ObservableObject
             Progress.CurrentFile = p.CurrentFile;
         });
     });
+
+    /// <summary>打开输出位置：转码成功则定位文件，否则打开输出目录。</summary>
+    [RelayCommand]
+    private void OpenOutputFolder() =>
+        ShellHelper.OpenOutputLocation(LastOutputPath, OutputDir, InputImage);
+
+    /// <summary>最近一次成功产出的文件（仅转码单文件时记录；抽帧按目录定位）。</summary>
+    [ObservableProperty]
+    public partial string LastOutputPath { get; set; } = string.Empty;
 }

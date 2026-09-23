@@ -22,7 +22,7 @@
         <StackPanel Spacing="16" Padding="24">
             <StackPanel>
                 <TextBlock Text="字幕" Style="{StaticResource TitleTextBlockStyle}" />
-                <TextBlock Text="从视频抽取字幕流、将外部字幕嵌入视频、或在 srt / ass / vtt 之间转换" Opacity="0.7" />
+                <TextBlock Text="抽取 / 嵌入字幕流，或在 srt·ass·vtt 间转换" Opacity="0.7" />
             </StackPanel>
 
             <!-- 输出文件夹（抽取 / 嵌入 / 转换共用，留空则输出到源文件同目录） -->
@@ -35,11 +35,14 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBox Grid.Column="0" Text="{x:Bind ViewModel.OutputDir, Mode=TwoWay}"
                                  PlaceholderText="留空则输出到源文件同目录" />
                         <Button Grid.Column="1" Content="浏览"
                                 Command="{x:Bind ViewModel.BrowseOutputCommand, Mode=OneWay}" />
+                        <Button Grid.Column="2" Content="打开"
+                                Command="{x:Bind ViewModel.OpenOutputFolderCommand, Mode=OneWay}" />
                     </Grid>
                 </StackPanel>
             </Border>

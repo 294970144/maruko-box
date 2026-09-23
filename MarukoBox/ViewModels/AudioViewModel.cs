@@ -236,6 +236,10 @@ public partial class AudioViewModel : ObservableObject
                 item.HasError = !ok;
                 item.Percent = ok ? 100 : item.Percent;
                 item.StatusText = ok ? "完成" : "失败";
+                if (ok)
+                {
+                    LastOutputPath = outPath;
+                }
             }
         }
         catch (OperationCanceledException)
@@ -275,4 +279,13 @@ public partial class AudioViewModel : ObservableObject
             OutputDir = dir;
         }
     }
+
+    /// <summary>最近一次成功产出的文件，供「打开输出文件夹」定位使用。</summary>
+    [ObservableProperty]
+    public partial string LastOutputPath { get; set; } = string.Empty;
+
+    /// <summary>在文件管理器中定位输出文件；无产出记录时打开输出目录。</summary>
+    [RelayCommand]
+    private void OpenOutputFolder() =>
+        ShellHelper.OpenOutputLocation(LastOutputPath, OutputDir, Queue.FirstOrDefault()?.InputPath);
 }
