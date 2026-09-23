@@ -110,8 +110,11 @@ if (string.IsNullOrEmpty(ffmpeg))
 Console.WriteLine($"ffmpeg: {ffmpeg}");
 Console.WriteLine($"内置版本标记: {ConfigService.GetBundledVersion()}");
 
-var src = @"C:\Users\zhang\fftest\src.mp4";
-var outp = @"C:\Users\zhang\fftest\out.mp4";
+// 【M8 修复】测试素材路径不再硬编码到某个人的目录：
+// 优先读环境变量 MB_TEST_SRC / MB_TEST_OUT，缺省才回落到原来的路径。
+// 换机器跑冒烟时：  $env:MB_TEST_SRC = "D:\test\src.mp4"
+var src = Environment.GetEnvironmentVariable("MB_TEST_SRC") ?? @"C:\Users\zhang\fftest\src.mp4";
+var outp = Environment.GetEnvironmentVariable("MB_TEST_OUT") ?? @"C:\Users\zhang\fftest\out.mp4";
 Directory.CreateDirectory(Path.GetDirectoryName(src)!);
 
 Console.WriteLine("=== 生成测试源 ===");

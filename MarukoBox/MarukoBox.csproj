@@ -111,7 +111,19 @@
   <PropertyGroup>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
-    <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
-    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+
+    <!--
+      【M4】关闭裁剪，并与构建脚本的行为对齐。
+
+      背景：Windows App SDK 1.2 起官方称 CsWinRT 投影「可裁剪」，但同一份 release notes
+      也提醒「裁剪对反射有限制，发布裁剪版务必充分测试」；Microsoft Q&A 上的实际案例
+      正是 WinUI 3 裁剪后启动崩溃（0xc000027b），根因是裁剪器对 x:Bind 生成代码与
+      XAML 类型下手过重。本项目的会话 / 配置走运行时反射序列化，正是文档点名的高危模式。
+
+      此前 Release 写的是 True，全靠 build-installer.ps1 的 -p:PublishTrimmed=false 压掉，
+      在 IDE 里直接发布就会踩坑。这里显式关掉以消除分叉；
+      若将来要重新启用，必须先跑通裁剪版的启动与会话保存。
+    -->
+    <PublishTrimmed>False</PublishTrimmed>
   </PropertyGroup>
 </Project>

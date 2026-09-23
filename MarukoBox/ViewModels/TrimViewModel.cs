@@ -30,6 +30,10 @@ public partial class TrimViewModel : ObservableObject
     private CancellationTokenSource? _thumbCts;
     private string? _namingRule;
 
+    /// <summary>上一轮生成的缩略图路径，用于在新图就位后删掉旧图（M2）。</summary>
+    private string? _lastStartThumb;
+    private string? _lastEndThumb;
+
     private string NamingRule =>
         _namingRule ??= OutputNaming.Normalize(_config.Load().OutputFileNameRule);
 
@@ -324,6 +328,10 @@ public partial class TrimViewModel : ObservableObject
         var dir = Path.Combine(Path.GetTempPath(), "MarukoBox", "trim-thumbs");
         Directory.CreateDirectory(dir);
 
+        // 【M2】顺手清掉一天前的历史缩略图。每次微调都会产生两张新图，
+        // 不清的话用上几十次就在 %TEMP% 里堆下几百个文件。
+        PurgeOldThumbs(dir);
+
         // 终点取 End 前 50ms：正好落在 End 上时常因关键帧/容器边界抽不出画面。
         var startSec = Start.TotalSeconds;
         var endSec = Math.Max(0, End.TotalSeconds - 0.05);
@@ -344,6 +352,13 @@ public partial class TrimViewModel : ObservableObject
             // 换文件名而不是换同一个文件：Image 控件会按 URI 缓存，同名文件更新后画面不刷新。
             StartThumbPath = okStart ? startFile : null;
             EndThumbPath = okEnd ? endFile : null;
+
+            // 【M2】既然每次都用新文件名，上一轮的旧文件就必须自己删掉，
+            // 否则「换名绕缓存」的做法会变成永久性垃圾堆积。
+            DeleteThumb(_lastStartThumb, startFile);
+            DeleteThumb(_lastEndThumb, endFile);
+            _lastStartThumb = okStart ? startFile : null;
+            _lastEndThumb = okEnd ? endFile : null;
         }
         catch (OperationCanceledException)
         {
@@ -477,6 +492,47 @@ public partial class TrimViewModel : ObservableObject
 
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
+
+    /// <summary>删除上一轮的缩略图（keep 是本轮正在用的，不能删）。</summary>
+    private static void DeleteThumb(string? old, string? keep)
+    {
+        if (string.IsNullOrEmpty(old) || string.Equals(old, keep, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(old))
+            {
+                File.Delete(old);
+            }
+        }
+        catch
+        {
+            // 删不掉（被占用 / 权限）不值得打断裁剪流程
+        }
+    }
+
+    /// <summary>清掉目录下一天前的文件：这些都是本进程产生的临时缩略图。</summary>
+    private static void PurgeOldThumbs(string dir)
+    {
+        try
+        {
+            var cutoff = DateTime.Now.AddDays(-1);
+            foreach (var f in Directory.EnumerateFiles(dir, "*.jpg"))
+            {
+                if (File.GetLastWriteTime(f) < cutoff)
+                {
+                    File.Delete(f);
+                }
+            }
+        }
+        catch
+        {
+            // 清理失败不影响主流程
+        }
+    }
 
     /// <summary>供页面在"系统解码器放不出来"时告知 VM，切换为无预览模式。</summary>
     public void MarkPreviewFailed()

@@ -489,10 +489,14 @@ public partial class SettingsViewModel : ObservableObject
             var result = await dialog.ShowAsync();
             return result == ContentDialogResult.Primary;
         }
-        catch
+        catch (Exception ex)
         {
-            // 对话框不可用（如窗口尚未就绪）时直接视为确认，避免功能被卡死
-            return true;
+            // 【M1 修复】弹窗异常时改为「不确认」——与关机确认 ConfirmPowerActionAsync 的保守策略对齐。
+            // 此前这里是 return true（等于替用户点了「下载并安装」），
+            // 窗口还没就绪就会自动开始下载并静默执行安装包，方向完全反了。
+            // 没有明确的「用户同意」就不该动用户的系统。
+            App.LogCrash(ex, "SettingsViewModel.ConfirmAppUpdateAsync");
+            return false;
         }
     }
 
@@ -620,9 +624,11 @@ public partial class SettingsViewModel : ObservableObject
             var result = await dialog.ShowAsync();
             return result == ContentDialogResult.Primary;
         }
-        catch
+        catch (Exception ex)
         {
-            return true;
+            // 【M1 修复】同上：拿不到用户确认就当作取消，不能默认替用户同意安装。
+            App.LogCrash(ex, "SettingsViewModel.ConfirmFfmpegUpdateAsync");
+            return false;
         }
     }
 

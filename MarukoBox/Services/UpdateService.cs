@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -644,6 +646,13 @@ public sealed partial class UpdateService : IUpdateService
             // 1) 流式下载（带进度与取消支持）
             await DownloadFileAsync(downloadUrl, tempZip, progress, ct).ConfigureAwait(false);
 
+            // 1.5) v1.7.1（S1）：解压前先校验压缩包本身，避免把被污染的包解压进应用目录
+            if (!await VerifyDownloadAsync(downloadUrl, tempZip, ct).ConfigureAwait(false))
+            {
+                throw new InvalidOperationException(
+                    "ffmpeg 压缩包校验失败（SHA-256 与发布的不一致），已放弃安装");
+            }
+
             // 2) 解压到临时目录
             Directory.CreateDirectory(tempExtract);
             System.IO.Compression.ZipFile.ExtractToDirectory(tempZip, tempExtract);
@@ -738,6 +747,16 @@ public sealed partial class UpdateService : IUpdateService
             throw new InvalidOperationException("安装包下载失败（文件为空），已中止更新。");
         }
 
+        // v1.7.1（S1）：执行下载来的 exe 之前必须校验 SHA-256。
+        // 只查「非空」是不够的——HTTPS 保护的是传输过程，挡不住发布仓库或镜像源被污染，
+        // 而这一步之后就是 Process.Start，等于替攻击者执行程序。
+        if (!await VerifyDownloadAsync(downloadUrl, dest, ct).ConfigureAwait(false))
+        {
+            TryCleanup(dest);
+            throw new InvalidOperationException(
+                "安装包校验失败（SHA-256 与发布的不一致），已删除下载文件并中止更新。");
+        }
+
         return dest;
     }
 
@@ -803,6 +822,87 @@ public sealed partial class UpdateService : IUpdateService
                 progress?.Report(written * 100.0 / total);
             }
         }
+    }
+
+    // ---------- 下载完整性校验（v1.7.1 / S1） ----------
+
+    /// <summary>计算文件的 SHA-256，返回小写十六进制字符串。</summary>
+    public static string ComputeSha256(string path)
+    {
+        using var stream = File.OpenRead(path);
+        var hash = SHA256.HashData(stream);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// 尝试取回资源对应的校验值：请求 <c>&lt;资源URL&gt;.sha256</c>，
+    /// 并从返回文本里解析出第一段 64 位十六进制（兼容 "<c>hash  filename</c>" 与裸 hash 两种格式）。
+    /// </summary>
+    /// <returns>取到则返回小写 hash；资源不存在（404）或解析不出则返回 null。</returns>
+    private async Task<string?> TryFetchSha256Async(string assetUrl, CancellationToken ct)
+    {
+        var checksumUrl = assetUrl + ".sha256";
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, checksumUrl);
+            request.Headers.UserAgent.ParseAdd($"MarukoBox/{GetAppVersionStatic()}");
+            using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+
+            // 没有随包发布校验文件时（旧 Release 或镜像源缺失），返回 null 由调用方决定策略
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            var text = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            var m = Sha256Pattern.Match(text);
+            return m.Success ? m.Value.ToLowerInvariant() : null;
+        }
+        catch (Exception ex)
+        {
+            // 校验文件取不到不应阻断更新流程本身，但必须留下痕迹
+            App.LogInfo($"未能获取校验文件 {checksumUrl}：{ex.GetType().Name}");
+            return null;
+        }
+    }
+
+    private static readonly Regex Sha256Pattern = new(@"\b[0-9a-fA-F]{64}\b", RegexOptions.Compiled);
+
+    /// <summary>
+    /// 校验已下载文件的 SHA-256 与随包发布的一致。
+    /// </summary>
+    /// <returns>
+    /// <list type="bullet">
+    /// <item>校验通过 → true</item>
+    /// <item>校验值一致但缺失（Release 未提供 .sha256）→ true，仅记录警告</item>
+    /// <item>不一致 → false（调用方必须删除文件并中止）</item>
+    /// </list>
+    /// </returns>
+    private async Task<bool> VerifyDownloadAsync(string url, string localPath, CancellationToken ct)
+    {
+        var expected = await TryFetchSha256Async(url, ct).ConfigureAwait(false);
+        var actual = ComputeSha256(localPath);
+
+        if (expected is null)
+        {
+            // 同源校验的固有局限：攻击者若能替换安装包，往往也能替换同一处的校验值。
+            // 所以这里只做"能做的那一半"——防传输截断 / CDN 污染 / 镜像站内容漂移，
+            // 真正防篡改要靠安装包签名（Authenticode）。
+            App.LogInfo($"未提供 .sha256 校验文件，跳过校验（实际 SHA-256={actual}）");
+            return true;
+        }
+
+        if (!string.Equals(expected, actual, StringComparison.Ordinal))
+        {
+            App.LogInfo($"校验失败：期望 {expected}，实际 {actual}");
+            return false;
+        }
+
+        App.LogInfo($"SHA-256 校验通过：{actual}");
+        return true;
     }
 
     private static void TryCleanup(string path)
