@@ -1,4 +1,4 @@
-# MarukoBox v1.8.0
+# MarukoBox v1.7.2
 
 > 新增「打开输出文件夹」一键定位结果，并精简软件内文案
 
@@ -17,12 +17,12 @@
 
 ## 说明
 
-- 本次为功能增量（新增按钮）+ 文案打磨，无破坏性变更；按版本规则从 1.7.1 升至 1.8.0。
+- 本次为功能增量（新增按钮）+ 文案打磨，无破坏性变更；从 1.7.1 升至 1.7.2（特例，不走 MINOR 规范）。
 - 输出默认落在源文件同目录，按设置里的「输出文件命名规则」命名；若规则会生成与源文件同名的路径，自动追加 `_trim` 等后缀，避免覆盖原片。
 
 ## 下载
 
-- **GitHub**：https://github.com/294970144/maruko-box/releases/tag/v1.8.0
-- **Gitee**：https://gitee.com/zhang-lin701442/maruko-box/releases/tag/v1.8.0
+- **GitHub**：https://github.com/294970144/maruko-box/releases/tag/v1.7.2
+- **Gitee**：https://gitee.com/zhang-lin701442/maruko-box/releases/tag/v1.7.2
 
-`MarukoBoxSetup-Inno_1.8.0.exe` · 当前用户安装（无需 UAC）· 内置 ffmpeg 7.1.1-5
+`MarukoBoxSetup-Inno_1.7.2.exe` · 当前用户安装（无需 UAC）· 内置 ffmpeg 7.1.1-5
