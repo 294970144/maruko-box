@@ -162,6 +162,12 @@
                                  PlaceholderText="留空 = 自动使用内置 ffmpeg" />
                         <Button Grid.Column="1" Content="浏览…" Command="{x:Bind ViewModel.BrowseFfmpegCommand, Mode=OneWay}" />
                     </Grid>
+
+                    <!-- 【B3 修复】内置 ffmpeg 存在时明确告知：手动路径不会生效 -->
+                    <InfoBar Severity="Informational"
+                             Message="{x:Bind ViewModel.FfmpegPathHint, Mode=OneWay}"
+                             IsOpen="True"
+                             Visibility="{x:Bind ViewModel.HasBundledFfmpeg, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
             </Border>
 
@@ -182,7 +188,7 @@
 
                     <StackPanel Spacing="6"
                                 Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
-                        <TextBlock Text="多 GPU 设备序号（0 = 自动）" Opacity="0.8" />
+                        <TextBlock Text="多 GPU 设备序号（0 = 自动；仅 NVIDIA NVENC 生效）" Opacity="0.8" />
                         <NumberBox Value="{x:Bind ViewModel.GpuDevice, Mode=TwoWay}"
                                    Minimum="0" Maximum="3" SmallChange="1" SpinButtonPlacementMode="Compact"
                                    Width="160" HorizontalAlignment="Left" />

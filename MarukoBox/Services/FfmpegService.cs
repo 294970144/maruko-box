@@ -221,7 +221,12 @@ public class FfmpegService : IFfmpegService
         }
 
         // ---------- 多 GPU 选择 ----------
-        if (isGpu && settings.GpuDevice > 0)
+        // 【B1 修复】-gpu 只有 NVENC 认。AMF (AMD) / QSV (Intel) 收到这个参数会直接
+        // 报 "Option not found" 让整次编码失败，而设置页的设备号输入框对所有用户可见，
+        // 非 N 卡用户一旦填了 >0 就每次必挂。
+        // QSV 的多设备选择另有机制且各 ffmpeg 版本参数名不一致，未实测前宁可不加。
+        if (settings.GpuDevice > 0 &&
+            resolvedEncoder is EncoderType.NvencHevc or EncoderType.NvencH264)
         {
             sb.Append($"-gpu {settings.GpuDevice} ");
         }

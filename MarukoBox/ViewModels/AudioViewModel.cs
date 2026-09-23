@@ -252,7 +252,13 @@ public partial class AudioViewModel : ObservableObject
             IsBusy = false;
             _cts?.Dispose();
             _cts = null;
-            StatusText = Queue.All(i => i.IsDone) ? "全部完成" : "转码结束";
+            // 【v1.4.1 / B3 修复 · 音频页补齐】出错时必须保留 catch 里写入的具体原因。
+            // 视频页当年就修过这个：finally 无条件覆盖成「全部完成 / 转码结束」，
+            // 用户点开只能看到「失败」却永远看不到为什么失败。音频页原样漏了，这里照抄视频页的写法。
+            if (!Queue.Any(i => i.HasError))
+            {
+                StatusText = Queue.All(i => i.IsDone) ? "全部完成" : "转码结束";
+            }
         }
     }
 

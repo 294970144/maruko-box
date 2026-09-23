@@ -28,3 +28,9 @@ if (-not (Test-Path $IssFile)) { throw "找不到 .iss: $IssFile" }
 
 & $iscc "/DPayloadDir=$PayloadDir" "/DOutDir=$OutDir" $IssFile *>&1
 "EXITCODE=$LASTEXITCODE"
+
+# 【S2 修复】必须把 iscc 的退出码传出去。
+# 此前只打印不退出：外层 build-installer.ps1 用 $LASTEXITCODE 判断成败时，
+# 读到的是「本次脚本自身」的退出码（0），iscc 编译失败也会被当成成功，
+# dist 里没有新安装包却照样打印「=== 完成 ===」。
+exit $LASTEXITCODE

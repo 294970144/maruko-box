@@ -70,6 +70,27 @@ if ($bundleFfmpeg) {
 & (Join-Path $PSScriptRoot "build.ps1") -PayloadDir $PayloadDir -OutDir $outDir
 if ($LASTEXITCODE -ne 0) { throw "iscc 编译失败，退出码 $LASTEXITCODE" }
 
+# 【S2 修复】退出码之外的第二道保险：按 .iss 里的版本号核对产物是否真的落地。
+# 脚本调用曾出现过「退出码是 0、dist 里却什么都没有」的静默失败，
+# 光看退出码不足以证明包打出来了。
+$issPath = Join-Path $PSScriptRoot "marukobox.iss"
+$versionTag = ""
+if (Test-Path -LiteralPath $issPath) {
+    $hit = Select-String -LiteralPath $issPath -Pattern '#define\s+MyAppVersion\s+"([^"]+)"' |
+           Select-Object -First 1
+    if ($hit) { $versionTag = $hit.Matches[0].Groups[1].Value }
+}
+
+if ($versionTag) {
+    $expected = Join-Path $outDir "MarukoBoxSetup-Inno_$versionTag.exe"
+    if (-not (Test-Path -LiteralPath $expected)) {
+        throw "编译未产出安装包: $expected"
+    }
+
+    $sizeMb = [math]::Round((Get-Item -LiteralPath $expected).Length / 1MB, 1)
+    "    产物已就位: $expected ($sizeMb MB)"
+}
+
 "=== 4/4  清理中间 payload ==="
 if ($KeepPayload) {
     "已保留 payload: $PayloadDir"

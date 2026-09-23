@@ -52,6 +52,52 @@ foreach (var (preset, expect) in new (string Preset, int Expect)[]
                       $"gpu={(gpuOk ? "ok" : "BAD")} cpu={(cpuOk ? "ok" : "BAD")}");
 }
 Console.WriteLine($"  B1 质量四档: {(presetFails == 0 ? "PASS" : $"FAIL ({presetFails} 项)")}");
+
+// ---------- B1' 回归：-gpu 只能给 NVENC ----------
+// v1.7.0 修复：此前 -gpu 对 Nvenc/Amf/Qsv 一视同仁地追加，而该参数只有 NVENC 认识，
+// AMD / Intel 用户在设置页填了设备号就会每次编码都报 "Option not found" 失败。
+Console.WriteLine("=== B1' 回归：-gpu 只给 NVENC ===");
+Console.Out.Flush();
+var gpuFails = 0;
+
+EncodeSettings SettingsWith(int device) => new() { GpuDevice = device };
+
+foreach (var (type, label) in new (EncoderType Type, string Label)[]
+         {
+             (EncoderType.NvencHevc, "NVENC HEVC"),
+             (EncoderType.NvencH264, "NVENC H.264"),
+             (EncoderType.AmfHevc, "AMD AMF"),
+             (EncoderType.QsvHevc, "Intel QSV"),
+             (EncoderType.X264, "x264 CPU")
+         })
+{
+    var encArgs = new FfmpegService().BuildArguments(
+        SettingsWith(1), type, new GpuInfo { HasCudaScale = true });
+
+    var isNvenc = type is EncoderType.NvencHevc or EncoderType.NvencH264;
+    var hasGpuFlag = encArgs.Contains("-gpu ", StringComparison.Ordinal);
+    var gpuOk = hasGpuFlag == isNvenc;
+
+    if (!gpuOk)
+    {
+        gpuFails++;
+    }
+
+    Console.WriteLine($"  {(gpuOk ? "PASS" : "FAIL")} {label}: -gpu {(hasGpuFlag ? "有" : "无")}（应为 {(isNvenc ? "有" : "无")}）");
+}
+
+// 设备号 0 = 自动，任何编码器都不该出现 -gpu
+var zeroArgs = new FfmpegService().BuildArguments(
+    SettingsWith(0), EncoderType.NvencHevc, new GpuInfo { HasCudaScale = true });
+var zeroOk = !zeroArgs.Contains("-gpu ", StringComparison.Ordinal);
+if (!zeroOk)
+{
+    gpuFails++;
+}
+
+Console.WriteLine($"  {(zeroOk ? "PASS" : "FAIL")} 设备号 0（自动）时不追加 -gpu");
+Console.WriteLine($"  B1' -gpu 限定: {(gpuFails == 0 ? "PASS" : $"FAIL ({gpuFails} 项)")}");
+Console.Out.Flush();
 Console.Out.Flush();
 
 // 与主程序一致的路径解析链：内置 ffmpeg 优先，其次 PATH

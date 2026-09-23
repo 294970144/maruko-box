@@ -112,6 +112,18 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial string BundledVersionText { get; set; } = string.Empty;
 
+    /// <summary>
+    /// 是否存在内置 ffmpeg。存在时，设置页里手动指定的 ffmpeg.exe 路径<b>不会生效</b>
+    /// ——路径解析优先级是「内置 → 手动 → PATH」。
+    /// 不把这个事实讲清楚，用户会以为「设置了却不生效」是个 bug。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool HasBundledFfmpeg { get; set; }
+
+    /// <summary>ffmpeg 路径卡片下的说明文案：被内置覆盖时明确告知。</summary>
+    [ObservableProperty]
+    public partial string FfmpegPathHint { get; set; } = string.Empty;
+
     [ObservableProperty]
     public partial bool IsCheckingUpdate { get; set; }
 
@@ -171,6 +183,13 @@ public partial class SettingsViewModel : ObservableObject
 
         LocalVersionText = $"当前版本：{UpdateService.GetAppVersionStatic()}";
         BundledVersionText = GetBundledDisplayText();
+
+        // 【B3 修复】让「手动路径被内置覆盖」这件事在 UI 上可见，
+        // 而不是让用户填了半天发现不生效。
+        HasBundledFfmpeg = ConfigService.HasBundledFfmpeg;
+        FfmpegPathHint = HasBundledFfmpeg
+            ? $"当前使用内置 ffmpeg {BundledVersionText}，此处填写的路径仅在内置 ffmpeg 不存在时才会生效。"
+            : "留空则自动探测（内置 → PATH）。";
 
         _ = DetectAsync();
     }
