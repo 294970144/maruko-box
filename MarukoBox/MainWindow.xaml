@@ -40,11 +40,6 @@
                         <SymbolIcon Symbol="Video" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="裁剪" Tag="Trim">
-                    <NavigationViewItem.Icon>
-                        <SymbolIcon Symbol="Crop" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
                 <NavigationViewItem Content="音频" Tag="Audio">
                     <NavigationViewItem.Icon>
                         <SymbolIcon Symbol="Audio" />
@@ -73,6 +68,11 @@
                 <NavigationViewItem Content="工具" Tag="Tools">
                     <NavigationViewItem.Icon>
                         <SymbolIcon Symbol="Repair" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="裁剪" Tag="Trim">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Crop" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem Content="设置" Tag="Settings">

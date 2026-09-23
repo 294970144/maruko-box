@@ -36,7 +36,20 @@ public sealed partial class TrimPage : Page
         Timeline.Committed += Timeline_Committed;
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
 
+        // 画质滑杆的范围必须在代码后置里按「Maximum → Value → Minimum」的顺序设置。
+        //
+        // 为什么不能在 XAML 里写 Minimum="14" Maximum="32"：
+        // ① 官方 RangeBase.Minimum 文档明确要求——XAML 中应先声明 Maximum 再声明 Minimum，
+        //    顺序反了会导致赋值被忽略或范围被改写成意外值；
+        // ② Slider 的 Value 默认是 0，先赋 Minimum=14 会让当前值落在范围外，
+        //    实测直接抛 XamlParseException「Failed to assign to property 'RangeBase.Minimum'」，
+        //    页面构造失败 → 导航被吞掉，表现为「点了裁剪页没反应」。
+        //
+        // 这里顺序写死：先把上界抬到 32（Value=0 合法），再把 Value 设成画质默认值 20，
+        // 最后才落下界 14（此时 Value 已在范围内，不会越界）。
+        QualitySlider.Maximum = 32;
         QualitySlider.Value = ViewModel.Quality;
+        QualitySlider.Minimum = 14;
         QualityText.Text = ViewModel.Quality.ToString();
     }
 

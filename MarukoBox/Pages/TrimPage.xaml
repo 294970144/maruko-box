@@ -175,8 +175,13 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
+                            <!-- 范围在代码后置里设置：XAML 中 Minimum / Maximum 的声明顺序会影响
+                                 赋值结果（官方 RangeBase.Minimum 文档明确要求先声明 Maximum），
+                                 且 Slider 默认 Value=0，先赋 Minimum=14 会因越界直接抛
+                                 XamlParseException——页面构造失败会被吞成「点了没反应」。
+                                 详见 TrimPage.xaml.cs 构造函数里的注释。 -->
                             <Slider Grid.Column="0" x:Name="QualitySlider"
-                                    Minimum="14" Maximum="32" StepFrequency="1" TickFrequency="2"
+                                    StepFrequency="1" TickFrequency="2"
                                     ValueChanged="QualitySlider_ValueChanged" />
                             <TextBlock Grid.Column="1" x:Name="QualityText" VerticalAlignment="Center" />
                         </Grid>
