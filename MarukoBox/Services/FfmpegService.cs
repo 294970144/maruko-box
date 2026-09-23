@@ -119,6 +119,39 @@ public interface IFfmpegService
         string outputSub,
         IProgress<EncodeProgress> progress,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// 构建裁剪命令行参数（不含 ffmpeg.exe 本身）。
+    /// 单独暴露出来是为了能被冒烟测试直接断言——裁剪的坑几乎全在参数顺序上
+    /// （-ss 的位置、-t 与 -to 的语义），不跑一遍真实文件很难发现。
+    /// </summary>
+    string BuildTrimArguments(TrimRequest request, GpuInfo gpuInfo);
+
+    /// <summary>
+    /// 按指定区间裁剪视频。
+    /// <see cref="TrimMode.Copy"/> 直接拷贝码流（秒级完成、画质无损，切点对齐关键帧）；
+    /// <see cref="TrimMode.ReEncode"/> 重新编码视频轨（切点精确到帧，耗时与片段长度相关）。
+    /// </summary>
+    /// <param name="gpuInfo">本机硬件能力，用于解析 <see cref="EncoderType.Auto"/>。</param>
+    /// <returns>成功返回 true；被取消或失败返回 false。</returns>
+    Task<bool> TrimAsync(
+        string ffmpegPath,
+        TrimRequest request,
+        GpuInfo gpuInfo,
+        IProgress<EncodeProgress> progress,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// 抽取指定时刻的一帧，保存为图片（用于裁剪页的起点 / 终点缩略图）。
+    /// </summary>
+    /// <returns>成功返回 true（文件已落盘）。</returns>
+    Task<bool> GrabFrameAsync(
+        string ffmpegPath,
+        string inputVideo,
+        double seconds,
+        string outputImagePath,
+        int maxWidth = 320,
+        CancellationToken ct = default);
 }
 
 /// <inheritdoc cref="IFfmpegService"/>
@@ -1236,6 +1269,123 @@ public class FfmpegService : IFfmpegService
 
         var remain = totalDuration - current.Processed;
         current.Remaining = remain > TimeSpan.Zero ? remain : TimeSpan.Zero;
+    }
+
+    /// <inheritdoc/>
+    public string BuildTrimArguments(TrimRequest request, GpuInfo gpuInfo)
+    {
+        if (string.IsNullOrWhiteSpace(request.OutputPath))
+        {
+            throw new InvalidOperationException("未指定输出路径。");
+        }
+
+        var duration = request.Duration;
+        if (duration <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("裁剪区间无效：结束时间必须晚于开始时间。");
+        }
+
+        var sb = new StringBuilder();
+
+        // -ss 放在 -i 之前：先按索引粗定位、再由解码器精修。
+        // 重编码模式下 ffmpeg 会从最近关键帧开始解码并丢弃起点之前的帧，因此起点是帧级精确的；
+        // 拷贝模式下无法在 GOP 中间切断，只能从最近关键帧开始（表现为片段可能略微提前）。
+        sb.Append($"-ss {request.Start.TotalSeconds:0.###} ");
+        sb.Append($"-i \"{request.InputPath}\" ");
+
+        // 用 -t（时长）而不是 -to（绝对时刻）：-ss 前置后输出时间轴从 0 重新起算，
+        // 此时 -to 会被当作"从起点起的偏移"，写出来容易相差一个 start。
+        sb.Append($"-t {duration.TotalSeconds:0.###} ");
+
+        if (request.Mode == TrimMode.Copy)
+        {
+            // 全轨无损拷贝：画面、音轨、字幕、章节原样保留。
+            //
+            // 不要加 -avoid_negative_ts：实测（ffmpeg 8.1.2，10s 测试片取 1.5s~6.5s）
+            // 加了它之后 -t 会被忽略，5 秒的请求产出 6.59 秒；
+            // 不加时输出 5.067 秒、首帧与源 1.5s 处完全一致（md5 相同），起点是精确的。
+            // 反直觉但可复现：这个选项会连带关闭拷贝模式下的时间戳截断。
+            sb.Append("-map 0 -c copy ");
+        }
+        else
+        {
+            var enc = request.Encoder == EncoderType.Auto ? gpuInfo.RecommendedEncoder : request.Encoder;
+            var quality = Math.Clamp(request.Quality, 0, 51);
+
+            // NVENC 用 -cq（配合默认 VBR），CPU 编码器用 -crf；
+            // AMF / QSV 的量化参数命名各家不一致，这里只用它们的预设档位，避免参数不被识别。
+            var qualityArgs = enc switch
+            {
+                EncoderType.NvencHevc or EncoderType.NvencH264 => $"-preset p5 -cq {quality}",
+                EncoderType.AmfHevc or EncoderType.QsvHevc => "-quality balanced",
+                _ => $"-preset medium -crf {quality}"
+            };
+
+            // 只保留画面与音轨：字幕 / data 轨在重编码后常与容器不兼容（例如 srt 进 MP4），
+            // 与其让它静默失败，不如在 UI 上把取舍说明白（见 TrimPage 的「精确剪切」提示）。
+            sb.Append($"-map 0:v:0 -map 0:a? ");
+            sb.Append($"-c:v {enc.ToFfmpegCodec()} {qualityArgs} -c:a copy ");
+        }
+
+        if (string.Equals(Path.GetExtension(request.OutputPath), ".mp4", StringComparison.OrdinalIgnoreCase))
+        {
+            sb.Append("-movflags +faststart ");
+        }
+
+        sb.Append($"-y \"{request.OutputPath}\"");
+
+        return sb.ToString();
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> TrimAsync(
+        string ffmpegPath,
+        TrimRequest request,
+        GpuInfo gpuInfo,
+        IProgress<EncodeProgress> progress,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.InputPath) || !File.Exists(request.InputPath))
+        {
+            throw new InvalidOperationException("源视频不存在，请重新选择。");
+        }
+
+        return await RunFfmpegCoreAsync(
+            ffmpegPath,
+            BuildTrimArguments(request, gpuInfo),
+            Path.GetFileName(request.OutputPath),
+            progress,
+            ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> GrabFrameAsync(
+        string ffmpegPath,
+        string inputVideo,
+        double seconds,
+        string outputImagePath,
+        int maxWidth = 320,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(inputVideo) || !File.Exists(inputVideo))
+        {
+            return false;
+        }
+
+        var dir = Path.GetDirectoryName(outputImagePath);
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        // -2 表示按偶数对齐（部分编码器要求宽高为偶数）；-1 在奇分辨率下会直接报错。
+        var scale = maxWidth > 0 ? $"-vf scale={maxWidth}:-2 " : string.Empty;
+        var args = $"-ss {Math.Max(0, seconds):0.###} -i \"{inputVideo}\" " +
+                   $"{scale}-frames:v 1 -q:v 3 -y \"{outputImagePath}\"";
+
+        // 抽帧是一次性短任务，进度无意义，用空接收者满足参数契约。
+        return await RunFfmpegCoreAsync(
+            ffmpegPath, args, Path.GetFileName(inputVideo), new Progress<EncodeProgress>(), ct);
     }
 
     /// <summary>

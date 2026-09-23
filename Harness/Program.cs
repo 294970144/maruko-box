@@ -12,6 +12,10 @@ if (args.Any(a => a.Equals("recover", StringComparison.OrdinalIgnoreCase)))
 {
     return RecoverSmokeAsync();
 }
+if (args.Any(a => a.Equals("trim", StringComparison.OrdinalIgnoreCase)))
+{
+    return await TrimSmokeAsync(args);
+}
 
 // ---------- B1 回归：质量四档必须真正落地为不同 CRF/CQP（纯逻辑，不依赖 ffmpeg） ----------
 // v1.4.0 该四档在 GPU 路径下完全失效（只写 Quality 但 RateControl 仍 vbr，四档输出体积相同）。
@@ -342,4 +346,146 @@ static int RecoverSmokeAsync()
     Console.WriteLine($"\n=== 更新中断自愈冒烟: {(fails == 0 ? "成功" : $"失败 {fails} 项")} ===");
     Console.Out.Flush();
     return fails == 0 ? 0 : 1;
+}
+
+// ---------- 裁剪冒烟 ----------
+// 裁剪的坑几乎全在参数顺序上：-ss 放在 -i 前后语义不同；前置 -ss 时 -to 会少算一个 start；
+// -avoid_negative_ts make_zero 会连带关掉拷贝模式的时间戳截断（实测 5 秒请求产出 6.59 秒）。
+// 这些只靠"编译过"发现不了，所以这里既断言参数字符串，也拿真实文件各跑一遍核对时长。
+async Task<int> TrimSmokeAsync(string[] argv)
+{
+    var rest = argv.Where(a => !a.Equals("trim", StringComparison.OrdinalIgnoreCase)).ToList();
+    var input = rest.ElementAtOrDefault(0) ?? string.Empty;
+    var start = double.TryParse(rest.ElementAtOrDefault(1), out var s) ? s : 1.5;
+    var dur = double.TryParse(rest.ElementAtOrDefault(2), out var d) ? d : 5.0;
+
+    Console.WriteLine("=== 裁剪冒烟 ===");
+    Console.Out.Flush();
+
+    var fails = 0;
+    void Check(string name, bool ok, string? detail = null)
+    {
+        if (!ok)
+        {
+            fails++;
+        }
+
+        Console.WriteLine($"  {(ok ? "PASS" : "FAIL")} {name}{(detail is null ? "" : "  " + detail)}");
+        Console.Out.Flush();
+    }
+
+    if (!File.Exists(input))
+    {
+        Console.WriteLine($"  用法: MarukoBox.Harness.exe trim <视频路径> [起点秒] [时长秒]");
+        Console.WriteLine($"  输入不存在: {input}");
+        return 2;
+    }
+
+    var ffmpeg = ConfigService.ResolveFfmpegPath();
+    if (string.IsNullOrEmpty(ffmpeg))
+    {
+        Console.WriteLine("  未找到 ffmpeg，无法冒烟。");
+        return 2;
+    }
+
+    // ffprobe 优先取 ffmpeg 同目录，其次交给 PATH
+    var ffprobe = Path.Combine(Path.GetDirectoryName(ffmpeg)!, "ffprobe.exe");
+    if (!File.Exists(ffprobe))
+    {
+        ffprobe = "ffprobe";
+    }
+
+    var svc = new FfmpegService();
+    var gpu = new GpuInfo();   // 冒烟不依赖显卡：精确模式显式指定 CPU 编码器
+    var outDir = Path.Combine(Path.GetTempPath(), "marukobox-trim-smoke");
+    Directory.CreateDirectory(outDir);
+
+    // ---- 1. 参数断言 ----
+    var copyReq = new TrimRequest
+    {
+        InputPath = input,
+        OutputPath = Path.Combine(outDir, "copy.mp4"),
+        Start = TimeSpan.FromSeconds(start),
+        End = TimeSpan.FromSeconds(start + dur),
+        Mode = TrimMode.Copy
+    };
+    var copyArgs = svc.BuildTrimArguments(copyReq, gpu);
+    Console.WriteLine($"  copy 参数: {copyArgs}");
+    Check("copy: 起点用 -ss", copyArgs.Contains($"-ss {start:0.###}", StringComparison.Ordinal));
+    Check("copy: 时长用 -t", copyArgs.Contains($"-t {dur:0.###}", StringComparison.Ordinal));
+    Check("copy: 全轨拷贝", copyArgs.Contains("-map 0 -c copy", StringComparison.Ordinal));
+    Check("copy: 不含 -avoid_negative_ts（会让 -t 失效）",
+        !copyArgs.Contains("avoid_negative_ts", StringComparison.Ordinal));
+
+    var encReq = new TrimRequest
+    {
+        InputPath = input,
+        OutputPath = Path.Combine(outDir, "reenc.mp4"),
+        Start = TimeSpan.FromSeconds(start),
+        End = TimeSpan.FromSeconds(start + dur),
+        Mode = TrimMode.ReEncode,
+        Encoder = EncoderType.X264,
+        Quality = 20
+    };
+    var encArgs = svc.BuildTrimArguments(encReq, gpu);
+    Console.WriteLine($"  重编码参数: {encArgs}");
+    Check("重编码: libx264 + crf 20",
+        encArgs.Contains("-c:v libx264", StringComparison.Ordinal) &&
+        encArgs.Contains("-crf 20", StringComparison.Ordinal));
+    Check("重编码: 音轨拷贝", encArgs.Contains("-c:a copy", StringComparison.Ordinal));
+
+    // ---- 2. 真跑一遍，核对输出时长 ----
+    var progress = new Progress<EncodeProgress>(p =>
+    {
+        if (p.HasError)
+        {
+            Console.WriteLine($"    [错误] {p.ErrorMessage}");
+        }
+    });
+
+    var okCopy = await svc.TrimAsync(ffmpeg, copyReq, gpu, progress);
+    var okEnc = await svc.TrimAsync(ffmpeg, encReq, gpu, progress);
+    Check("copy 模式执行成功", okCopy && File.Exists(copyReq.OutputPath));
+    Check("重编码模式执行成功", okEnc && File.Exists(encReq.OutputPath));
+
+    var durCopy = await ProbeDurationAsync(ffprobe, copyReq.OutputPath);
+    var durEnc = await ProbeDurationAsync(ffprobe, encReq.OutputPath);
+
+    // 允许 0.2s 误差：音频帧粒度与容器时间戳会带一点尾巴
+    Check($"copy 输出时长≈{dur:0.###}s", Math.Abs(durCopy - dur) <= 0.2, $"实际 {durCopy:0.###}s");
+    Check($"重编码输出时长≈{dur:0.###}s", Math.Abs(durEnc - dur) <= 0.2, $"实际 {durEnc:0.###}s");
+
+    Console.WriteLine($"=== 裁剪冒烟: {(fails == 0 ? "全部通过" : $"失败 {fails} 项")} ===");
+    Console.Out.Flush();
+    return fails == 0 ? 0 : 1;
+}
+
+static async Task<double> ProbeDurationAsync(string ffprobe, string file)
+{
+    if (!File.Exists(file))
+    {
+        return -1;
+    }
+
+    var psi = new ProcessStartInfo
+    {
+        FileName = ffprobe,
+        Arguments = $"-v error -show_entries format=duration -of csv=p=0 \"{file}\"",
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        CreateNoWindow = true
+    };
+
+    using var p = Process.Start(psi);
+    if (p is null)
+    {
+        return -1;
+    }
+
+    var text = await p.StandardOutput.ReadToEndAsync();
+    await p.WaitForExitAsync();
+
+    return double.TryParse(text.Trim(), System.Globalization.NumberStyles.Float,
+        System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : -1;
 }

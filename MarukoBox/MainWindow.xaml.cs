@@ -104,6 +104,7 @@ public sealed partial class MainWindow : Window
         var pageType = tag switch
         {
             "Video" => typeof(VideoPage),
+            "Trim" => typeof(TrimPage),
             "Extract" => typeof(ExtractPage),
             "Audio" => typeof(AudioPage),
             "Mux" => typeof(MuxPage),

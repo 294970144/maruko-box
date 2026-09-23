@@ -1,0 +1,202 @@
+<Page
+    x:Class="MarukoBox.Pages.TrimPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:MarukoBox.Pages"
+    xmlns:helpers="using:MarukoBox.Helpers"
+    xmlns:conv="using:MarukoBox.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d" NavigationCacheMode="Required">
+
+    <Page.Resources>
+        <conv:BoolToVisibility x:Key="BoolToVisibility" />
+        <conv:InvertBool x:Key="InvertBool" />
+        <conv:InvertBoolToVisibility x:Key="InvertBoolToVisibility" />
+        <conv:ShortNumber x:Key="ShortNumber" />
+        <conv:TimeSpanToClock x:Key="TimeSpanToClock" />
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" Padding="24">
+
+            <StackPanel>
+                <TextBlock Text="裁剪" Style="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock Text="拖动时间轴两端的圆点选择起止时间，默认无损快切（秒级完成）"
+                           Opacity="0.7" />
+            </StackPanel>
+
+            <!-- 源文件：整张卡片都是拖放区 -->
+            <Border x:Name="InputCard"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    AllowDrop="True"
+                    DragEnter="InputCard_DragEnter"
+                    DragOver="InputCard_DragOver"
+                    DragLeave="InputCard_DragLeave"
+                    Drop="InputCard_Drop">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock Text="视频文件" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind ViewModel.InputPath, Mode=OneWay}"
+                                   Opacity="0.7" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="浏览…" Click="BrowseInput_Click" />
+                </Grid>
+            </Border>
+
+            <!-- 预览 + 时间轴 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    Visibility="{x:Bind ViewModel.HasVideo, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Spacing="12">
+
+                    <!-- 预览画面：系统解码器；放不出来时折叠，只留时间轴 -->
+                    <MediaPlayerElement x:Name="PreviewPlayer"
+                                        Height="300"
+                                        AreTransportControlsEnabled="False"
+                                        Stretch="Uniform"
+                                        Visibility="{x:Bind ViewModel.PreviewFailed, Mode=OneWay, Converter={StaticResource InvertBoolToVisibility}}" />
+
+                    <InfoBar Severity="Warning"
+                             Title="预览不可用"
+                             Message="系统解码器无法播放该文件，仍可通过时间轴与缩略图完成裁剪。"
+                             IsOpen="True"
+                             Visibility="{x:Bind ViewModel.PreviewFailed, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+
+                    <!-- 播放控制 -->
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" x:Name="BtnPlayPause" Content="播放" Click="PlayPause_Click" />
+                        <Button Grid.Column="1" Content="跳到起点" Click="GoStart_Click" />
+                        <Button Grid.Column="2" Content="跳到终点" Click="GoEnd_Click" />
+                        <TextBlock Grid.Column="4" VerticalAlignment="Center">
+                            <Run Text="{x:Bind ViewModel.PositionText, Mode=OneWay}" />
+                            <Run Text=" / " />
+                            <Run Text="{x:Bind ViewModel.DurationText, Mode=OneWay}" />
+                        </TextBlock>
+                    </Grid>
+
+                    <!-- 时间轴：左右两个圆点即起止时间 -->
+                    <helpers:TrimTimeline x:Name="Timeline" />
+
+                    <!-- 起止时间与微调 -->
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Spacing="6">
+                            <TextBlock Text="开始时间" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <Image x:Name="StartThumb" Height="90" Stretch="Uniform" HorizontalAlignment="Left" />
+                            <TextBlock Text="{x:Bind ViewModel.StartText, Mode=OneWay}"
+                                       FontFamily="Consolas" />
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Button Content="−1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="-1" />
+                                <Button Content="−0.1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="-0.1" />
+                                <Button Content="设为当前位置" Command="{x:Bind ViewModel.SetStartToPositionCommand, Mode=OneWay}" />
+                                <Button Content="+0.1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="0.1" />
+                                <Button Content="+1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="1" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Spacing="6">
+                            <TextBlock Text="结束时间" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <Image x:Name="EndThumb" Height="90" Stretch="Uniform" HorizontalAlignment="Left" />
+                            <TextBlock Text="{x:Bind ViewModel.EndText, Mode=OneWay}"
+                                       FontFamily="Consolas" />
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Button Content="−1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="-1" />
+                                <Button Content="−0.1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="-0.1" />
+                                <Button Content="设为当前位置" Command="{x:Bind ViewModel.SetEndToPositionCommand, Mode=OneWay}" />
+                                <Button Content="+0.1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="0.1" />
+                                <Button Content="+1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="1" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="选中片段" Opacity="0.7" VerticalAlignment="Center" />
+                        <TextBlock Text="{x:Bind ViewModel.SelectionText, Mode=OneWay}"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                   FontFamily="Consolas" VerticalAlignment="Center" />
+                        <Button Content="恢复整段" Command="{x:Bind ViewModel.ResetRangeCommand, Mode=OneWay}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 输出与执行 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16"
+                    Visibility="{x:Bind ViewModel.HasVideo, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Spacing="12">
+
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Text="{x:Bind ViewModel.OutputPath, Mode=TwoWay}"
+                                 PlaceholderText="输出路径（默认与源文件同目录）" />
+                        <Button Grid.Column="1" Content="另存为…" Click="BrowseOutput_Click" />
+                    </Grid>
+
+                    <ToggleSwitch x:Name="FastToggle"
+                                  Header="快速剪切（-c copy，默认：秒级完成、画质无损）"
+                                  IsOn="{x:Bind ViewModel.FastMode, Mode=TwoWay}" />
+
+                    <TextBlock Text="{x:Bind ViewModel.ModeHint, Mode=OneWay}"
+                               Opacity="0.7" TextWrapping="Wrap" />
+
+                    <StackPanel Spacing="6"
+                                Visibility="{x:Bind ViewModel.FastMode, Mode=OneWay, Converter={StaticResource InvertBoolToVisibility}}">
+                        <TextBlock Text="精确剪切编码器" Opacity="0.8" />
+                        <ComboBox ItemsSource="{x:Bind ViewModel.EncoderOptions, Mode=OneWay}"
+                                  DisplayMemberPath="Name" SelectedValuePath="Value"
+                                  SelectedValue="{x:Bind ViewModel.SelectedEncoderValue, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch" />
+                        <TextBlock Text="画质（数值越小越清晰、文件越大）" Opacity="0.8" Margin="0,8,0,0" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Slider Grid.Column="0" x:Name="QualitySlider"
+                                    Minimum="14" Maximum="32" StepFrequency="1" TickFrequency="2"
+                                    ValueChanged="QualitySlider_ValueChanged" />
+                            <TextBlock Grid.Column="1" x:Name="QualityText" VerticalAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
+
+                    <Button Content="开始裁剪" Style="{StaticResource AccentButtonStyle}"
+                            Command="{x:Bind ViewModel.StartCommand, Mode=OneWay}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InvertBool}}"
+                            HorizontalAlignment="Stretch" />
+
+                    <TextBlock Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                               Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" />
+
+                    <ProgressBar Value="{x:Bind ViewModel.Progress.Percent, Mode=OneWay}" Maximum="100" Height="8" />
+
+                    <Button Content="取消" HorizontalAlignment="Stretch"
+                            Command="{x:Bind ViewModel.CancelCommand, Mode=OneWay}"
+                            IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>
