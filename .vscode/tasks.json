@@ -1,0 +1,36 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build-debug",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "MarukoBox/MarukoBox.csproj",
+        "-c",
+        "Debug",
+        "-p:Platform=x64"
+      ],
+      "type": "shell",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "run-debug",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "MarukoBox/MarukoBox.csproj",
+        "-c",
+        "Debug",
+        "-p:Platform=x64"
+      ],
+      "type": "shell",
+      "problemMatcher": []
+    }
+  ]
+}

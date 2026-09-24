@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using MarukoBox.Helpers;
 using MarukoBox.ViewModels;
@@ -35,6 +36,9 @@ public sealed partial class TrimPage : Page
         Timeline.Edited += Timeline_Edited;
         Timeline.Committed += Timeline_Committed;
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+
+        // 空格键固定为播放/暂停（焦点在输入框/自激活控件上时除外，见 TrimPage_KeyDown）
+        AddHandler(KeyDownEvent, new KeyEventHandler(TrimPage_KeyDown), handledEventsToo: true);
 
         // 起止块的响应式布局：窗口尺寸变化、页面首次布局完成、载入新视频时都要重新判定
         Loaded += (_, _) => UpdateResponsiveLayout();
@@ -111,7 +115,7 @@ public sealed partial class TrimPage : Page
             player.PlaybackSession.PositionChanged -= PlaybackSession_PositionChanged;
             player.PlaybackSession.PositionChanged += PlaybackSession_PositionChanged;
 
-            BtnPlayPause.Content = "播放";
+            SetPlayPauseIcon(playing: false);
         }
         catch (Exception ex)
         {
@@ -120,6 +124,10 @@ public sealed partial class TrimPage : Page
             ViewModel.MarkPreviewFailed();
         }
     }
+
+    /// <summary>播放/暂停按钮切换图标（Symbol 枚举自带 Play / Pause，语义由 ToolTip 承担）。</summary>
+    private void SetPlayPauseIcon(bool playing) =>
+        BtnPlayPause.Content = new SymbolIcon(playing ? Symbol.Pause : Symbol.Play);
 
     private void PlaybackSession_PositionChanged(MediaPlaybackSession sender, object args)
     {
@@ -154,13 +162,13 @@ public sealed partial class TrimPage : Page
         }
 
         PreviewPlayer.MediaPlayer?.Play();
-        BtnPlayPause.Content = "暂停";
+        SetPlayPauseIcon(playing: true);
     }
 
     private void Pause()
     {
         PreviewPlayer.MediaPlayer?.Pause();
-        BtnPlayPause.Content = "播放";
+        SetPlayPauseIcon(playing: false);
     }
 
     /// <summary>跳转到指定时刻并同步 UI（暂停状态下也会刷新画面）。</summary>
@@ -194,6 +202,37 @@ public sealed partial class TrimPage : Page
         {
             Play();
         }
+    }
+
+    /// <summary>
+    /// 空格键固定为播放/暂停：AddHandler(handledEventsToo) 挂在页面级，抢在
+    /// ScrollViewer 把空格当翻页等默认行为之前收到。两类例外交给原生行为——
+    /// ① 文本输入类控件（要输入空格）；② 按钮 / 开关等自激活控件（它们的
+    /// KeyDown 已置按下态、KeyUp 触发点击，这里再拦会双触发：焦点在播放按钮上
+    /// 按空格会切换两次等于没切）。焦点在普通画面 / 时间轴 / 滑杆上时一律播放暂停。
+    /// WasKeyDown 过滤按住不放的系统自动重复，避免连按抖动。
+    /// </summary>
+    private void TrimPage_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Space || e.KeyStatus.WasKeyDown)
+        {
+            return;
+        }
+
+        if (FocusManager.GetFocusedElement(XamlRoot)
+            is TextBox or ComboBox or AutoSuggestBox
+            or Microsoft.UI.Xaml.Controls.Primitives.ButtonBase or ToggleSwitch)
+        {
+            return;
+        }
+
+        if (!ViewModel.HasVideo || ViewModel.PreviewFailed)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        PlayPause_Click(sender, e);
     }
 
     private void GoStart_Click(object sender, RoutedEventArgs e) => Seek(ViewModel.Start);
@@ -284,7 +323,7 @@ public sealed partial class TrimPage : Page
     // ---------- 响应式布局：起止块在「预览两侧」与「下方两列」之间切换 ----------
 
     private const double PreviewHeight = 300;
-    private const double SideThumbHeight = 150;
+    private const double SideThumbHeight = 170;
     private const double BottomThumbHeight = 90;
 
     /// <summary>起止块无法实测时的宽度估算值（按按钮行「−1s −0.1s 设为当前位置 +0.1s +1s」的渲染宽度）。</summary>

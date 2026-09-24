@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Harness/Harness.csproj" />
+  <Project Path="MarukoBox/MarukoBox.csproj" />
+</Solution>

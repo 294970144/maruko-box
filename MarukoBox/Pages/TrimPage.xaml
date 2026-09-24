@@ -102,9 +102,16 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <Button Grid.Column="0" x:Name="BtnPlayPause" Content="播放" Click="PlayPause_Click" />
-                        <Button Grid.Column="1" Content="跳到起点" Click="GoStart_Click" />
-                        <Button Grid.Column="2" Content="跳到终点" Click="GoEnd_Click" />
+                        <Button Grid.Column="0" x:Name="BtnPlayPause" Click="PlayPause_Click"
+                                ToolTipService.ToolTip="播放 / 暂停（空格）">
+                            <SymbolIcon Symbol="Play" />
+                        </Button>
+                        <Button Grid.Column="1" Click="GoStart_Click" ToolTipService.ToolTip="跳到起点">
+                            <SymbolIcon Symbol="Previous" />
+                        </Button>
+                        <Button Grid.Column="2" Click="GoEnd_Click" ToolTipService.ToolTip="跳到终点">
+                            <SymbolIcon Symbol="Next" />
+                        </Button>
                         <TextBlock Grid.Column="4" VerticalAlignment="Center">
                             <Run Text="{x:Bind ViewModel.PositionText, Mode=OneWay}" />
                             <Run Text=" / " />
@@ -123,12 +130,12 @@
                         </Grid.ColumnDefinitions>
 
                         <Grid Grid.Column="0" x:Name="BottomSlotLeft">
-                            <StackPanel x:Name="StartPanel" Spacing="6" HorizontalAlignment="Left">
-                                <TextBlock Text="开始时间" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <Image x:Name="StartThumb" Height="90" Stretch="Uniform" HorizontalAlignment="Left" />
+                            <StackPanel x:Name="StartPanel" Spacing="6" HorizontalAlignment="Center">
+                                <TextBlock Text="开始时间" Style="{StaticResource BodyStrongTextBlockStyle}" HorizontalAlignment="Center" />
+                                <Image x:Name="StartThumb" Height="90" Stretch="Uniform" HorizontalAlignment="Center" />
                                 <TextBlock Text="{x:Bind ViewModel.StartText, Mode=OneWay}"
-                                           FontFamily="Consolas" />
-                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                           FontFamily="Consolas" HorizontalAlignment="Center" />
+                                <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
                                     <Button Content="−1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="-1" />
                                     <Button Content="−0.1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="-0.1" />
                                     <Button Content="设为当前位置" Command="{x:Bind ViewModel.SetStartToPositionCommand, Mode=OneWay}" />
@@ -139,12 +146,12 @@
                         </Grid>
 
                         <Grid Grid.Column="1" x:Name="BottomSlotRight">
-                            <StackPanel x:Name="EndPanel" Spacing="6" HorizontalAlignment="Left">
-                                <TextBlock Text="结束时间" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <Image x:Name="EndThumb" Height="90" Stretch="Uniform" HorizontalAlignment="Left" />
+                            <StackPanel x:Name="EndPanel" Spacing="6" HorizontalAlignment="Center">
+                                <TextBlock Text="结束时间" Style="{StaticResource BodyStrongTextBlockStyle}" HorizontalAlignment="Center" />
+                                <Image x:Name="EndThumb" Height="90" Stretch="Uniform" HorizontalAlignment="Center" />
                                 <TextBlock Text="{x:Bind ViewModel.EndText, Mode=OneWay}"
-                                           FontFamily="Consolas" />
-                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                           FontFamily="Consolas" HorizontalAlignment="Center" />
+                                <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
                                     <Button Content="−1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="-1" />
                                     <Button Content="−0.1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="-0.1" />
                                     <Button Content="设为当前位置" Command="{x:Bind ViewModel.SetEndToPositionCommand, Mode=OneWay}" />
