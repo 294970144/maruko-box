@@ -36,6 +36,10 @@ public sealed partial class TrimPage : Page
         Timeline.Committed += Timeline_Committed;
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
 
+        // 起止块的响应式布局：窗口尺寸变化、页面首次布局完成、载入新视频时都要重新判定
+        Loaded += (_, _) => UpdateResponsiveLayout();
+        PreviewGrid.SizeChanged += (_, _) => UpdateResponsiveLayout();
+
         // 画质滑杆的范围必须在代码后置里按「Maximum → Value → Minimum」的顺序设置。
         //
         // 为什么不能在 XAML 里写 Minimum="14" Maximum="32"：
@@ -100,6 +104,9 @@ public sealed partial class TrimPage : Page
             }
 
             player.MediaFailed += (_, _) => App.RunOnUiThread(() => ViewModel.MarkPreviewFailed());
+
+            // 视频元数据就绪后才能拿到固有宽高比，此时重新判定起止块挂两侧还是回下方
+            player.MediaOpened += (_, _) => App.RunOnUiThread(UpdateResponsiveLayout);
 
             player.PlaybackSession.PositionChanged -= PlaybackSession_PositionChanged;
             player.PlaybackSession.PositionChanged += PlaybackSession_PositionChanged;
@@ -228,6 +235,11 @@ public sealed partial class TrimPage : Page
     {
         switch (e.PropertyName)
         {
+            case nameof(TrimViewModel.HasVideo):
+            case nameof(TrimViewModel.PreviewFailed):
+                UpdateResponsiveLayout();
+                break;
+
             case nameof(TrimViewModel.Duration):
                 Timeline.Duration = ViewModel.Duration;
                 break;
@@ -267,6 +279,99 @@ public sealed partial class TrimPage : Page
         }
 
         image.Source = new BitmapImage(new Uri(path));
+    }
+
+    // ---------- 响应式布局：起止块在「预览两侧」与「下方两列」之间切换 ----------
+
+    private const double PreviewHeight = 300;
+    private const double SideThumbHeight = 150;
+    private const double BottomThumbHeight = 90;
+
+    /// <summary>起止块无法实测时的宽度估算值（按按钮行「−1s −0.1s 设为当前位置 +0.1s +1s」的渲染宽度）。</summary>
+    private const double SidePanelFallbackWidth = 320;
+
+    /// <summary>判定余量与块宽之间留的呼吸间距。</summary>
+    private const double SideGap = 8;
+
+    /// <summary>当前是否处于宽模式（起止块挂在预览两侧）。</summary>
+    private bool _wideLayout;
+
+    /// <summary>
+    /// 按「预览两侧的剩余空白是否装得下一个起止块」切换布局。
+    ///
+    /// 竖屏 / 方形视频在宽预览区两侧留有大片 letterbox 黑边，把开始 / 结束块
+    /// 挂到两侧正好利用；横屏视频几乎占满整行、两侧无空白，回到下方两列。
+    /// 视频固有尺寸取自播放器的 NaturalVideoWidth / Height（已含旋转处理）；
+    /// 预览不可用或尺寸未知时保守回窄模式。
+    ///
+    /// 判据只依赖整行宽度与视频宽高比，与当前处于哪种模式无关——
+    /// 因此在阈值附近拖动窗口不会来回抖动。
+    /// </summary>
+    private void UpdateResponsiveLayout()
+    {
+        var session = Session;
+        var natW = (double)(session?.NaturalVideoWidth ?? 0);
+        var natH = (double)(session?.NaturalVideoHeight ?? 0);
+
+        if (!ViewModel.HasVideo || ViewModel.PreviewFailed ||
+            natW <= 0 || natH <= 0 || PreviewGrid.ActualWidth <= 0)
+        {
+            ApplyLayout(wide: false);
+            return;
+        }
+
+        var total = PreviewGrid.ActualWidth;
+        var videoWidth = Math.Min(total, PreviewHeight * natW / natH);
+        var sideSpace = (total - videoWidth) / 2;
+
+        var need = StartPanel.ActualWidth > 0 ? StartPanel.ActualWidth : SidePanelFallbackWidth;
+        ApplyLayout(wide: sideSpace >= need + SideGap);
+    }
+
+    private void ApplyLayout(bool wide)
+    {
+        if (wide == _wideLayout)
+        {
+            return;
+        }
+
+        _wideLayout = wide;
+
+        if (wide)
+        {
+            MoveToSlot(StartPanel, SideSlotLeft);
+            MoveToSlot(EndPanel, SideSlotRight);
+            StartPanel.VerticalAlignment = VerticalAlignment.Center;
+            EndPanel.VerticalAlignment = VerticalAlignment.Center;
+            StartThumb.Height = SideThumbHeight;
+            EndThumb.Height = SideThumbHeight;
+            SideLeftColumn.Width = GridLength.Auto;
+            SideRightColumn.Width = GridLength.Auto;
+            BottomPanels.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            MoveToSlot(StartPanel, BottomSlotLeft);
+            MoveToSlot(EndPanel, BottomSlotRight);
+            StartPanel.VerticalAlignment = VerticalAlignment.Top;
+            EndPanel.VerticalAlignment = VerticalAlignment.Top;
+            StartThumb.Height = BottomThumbHeight;
+            EndThumb.Height = BottomThumbHeight;
+            SideLeftColumn.Width = new GridLength(0);
+            SideRightColumn.Width = new GridLength(0);
+            BottomPanels.Visibility = Visibility.Visible;
+        }
+    }
+
+    /// <summary>把起止块从当前容器搬到目标插槽（元素只有一份实例，reparent 而非复制）。</summary>
+    private static void MoveToSlot(FrameworkElement element, Panel slot)
+    {
+        if (element.Parent is Panel current)
+        {
+            current.Children.Remove(element);
+        }
+
+        slot.Children.Add(element);
     }
 
     // ---------- 输出与执行 ----------
@@ -354,5 +459,12 @@ public sealed partial class TrimPage : Page
     private void InputCard_DragLeave(object sender, Microsoft.UI.Xaml.DragEventArgs e)
     {
         FileDropHelper.Restore(InputCard);
+    }
+
+    /// <summary>离开裁剪页时把工作参数并入 session.json，确保切走也不丢失（配合「保持习惯」）。</summary>
+    protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        MarukoBox.MainWindow.SaveSessionIfEnabled();
     }
 }

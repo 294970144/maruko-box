@@ -549,6 +549,44 @@ public partial class TrimViewModel : ObservableObject
     [ObservableProperty]
     public partial string LastOutputPath { get; set; } = string.Empty;
 
+    /// <summary>是否存在已产出的裁剪结果，用于启用「打开输出文件夹」按钮（无输出视频时禁用）。</summary>
+    public bool HasOutput => !string.IsNullOrEmpty(LastOutputPath);
+
+    partial void OnLastOutputPathChanged(string value) => OnPropertyChanged(nameof(HasOutput));
+
+    /// <summary>「保持习惯」：若开启，则恢复上次裁剪页工作参数（快速/精确、质量、编码器）。</summary>
+    public TrimViewModel()
+    {
+        if (AppServices.Config.Load().RememberLastSession)
+        {
+            RestoreTrimSession(ConfigService.LoadSession()?.Trim);
+        }
+    }
+
+    /// <summary>把裁剪页工作参数捕获为可持久化快照（供 MainWindow 写入 session.json）。</summary>
+    public SessionState.TrimSettings CaptureTrimSession() => new()
+    {
+        FastMode = FastMode,
+        Quality = Quality,
+        SelectedEncoderValue = SelectedEncoderValue
+    };
+
+    /// <summary>恢复裁剪页工作参数；null（无快照）或脏数据时保留默认值。</summary>
+    private void RestoreTrimSession(SessionState.TrimSettings? t)
+    {
+        if (t is null)
+        {
+            return;
+        }
+
+        FastMode = t.FastMode;
+        Quality = Math.Clamp(t.Quality, 14, 32);
+        if (Enum.TryParse<EncoderType>(t.SelectedEncoderValue, out var enc))
+        {
+            SelectedEncoderValue = enc.ToString();
+        }
+    }
+
     /// <summary>在文件管理器中定位裁剪结果；无产出记录时打开其所在目录。</summary>
     [RelayCommand]
     private void OpenOutputFolder() =>

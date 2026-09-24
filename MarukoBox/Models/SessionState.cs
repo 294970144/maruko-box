@@ -23,6 +23,22 @@ public class SessionState
     /// <summary>输出文件夹（VideoViewModel 独有，不在 EncodeSettings 里）。</summary>
     public string OutputDir { get; set; } = string.Empty;
 
+    /// <summary>裁剪页工作参数（快速/精确、恒定质量、编码器）。</summary>
+    public TrimSettings Trim { get; set; } = new();
+
+    /// <summary>裁剪页工作参数快照（「保持习惯」记忆）。</summary>
+    public sealed class TrimSettings
+    {
+        /// <summary>快速剪切（true）/ 精确剪切（false）。</summary>
+        public bool FastMode { get; set; } = true;
+
+        /// <summary>恒定质量值，合法范围 14~32（与页面 Slider 一致）。</summary>
+        public int Quality { get; set; } = 20;
+
+        /// <summary>精确剪切编码器下拉选中值（EncoderType 名）。</summary>
+        public string SelectedEncoderValue { get; set; } = "Auto";
+    }
+
     /// <summary>
     /// v1.4.0 及更早的扁平格式快照。仅用于把旧 session.json 迁移到新格式，
     /// 避免升级后用户「保持习惯」的参数被整体清空。

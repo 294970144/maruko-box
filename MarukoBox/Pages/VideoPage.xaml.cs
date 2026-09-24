@@ -93,4 +93,11 @@ public sealed partial class VideoPage : Page
             ViewModel.RemoveItemCommand.Execute(item);
         }
     }
+
+    /// <summary>离开视频页时把编码参数并入 session.json，确保切走也不丢失（配合「保持习惯」）。</summary>
+    protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedFrom(e);
+        MarukoBox.MainWindow.SaveSessionIfEnabled();
+    }
 }

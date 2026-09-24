@@ -55,23 +55,46 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1" CornerRadius="8" Padding="16"
                     Visibility="{x:Bind ViewModel.HasVideo, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
-                <StackPanel Spacing="12">
+                <!-- 三列响应式 Grid：宽模式把起止块挂到预览两侧（利用竖屏视频
+                     letterbox 出来的空白），窄模式（横屏视频 / 预览失败 / 窗口窄）
+                     侧列宽度归零、起止块回到下方两列。切换逻辑见 TrimPage.xaml.cs
+                     的 UpdateResponsiveLayout。 -->
+                <Grid x:Name="PreviewGrid" RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="SideLeftColumn" Width="0" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition x:Name="SideRightColumn" Width="0" />
+                    </Grid.ColumnDefinitions>
 
                     <!-- 预览画面：系统解码器；放不出来时折叠，只留时间轴 -->
                     <MediaPlayerElement x:Name="PreviewPlayer"
+                                        Grid.Row="0" Grid.Column="1"
                                         Height="300"
                                         AreTransportControlsEnabled="False"
                                         Stretch="Uniform"
                                         Visibility="{x:Bind ViewModel.PreviewFailed, Mode=OneWay, Converter={StaticResource InvertBoolToVisibility}}" />
 
-                    <InfoBar Severity="Warning"
+                    <!-- 侧插槽：宽模式时开始 / 结束块会被移到这里（元素只有一份实例，reparent 而非复制） -->
+                    <Grid x:Name="SideSlotLeft" Grid.Row="0" Grid.Column="0" />
+                    <Grid x:Name="SideSlotRight" Grid.Row="0" Grid.Column="2" />
+
+                    <InfoBar Grid.Row="1" Grid.ColumnSpan="3"
+                             Severity="Warning"
                              Title="预览不可用"
                              Message="系统解码器无法播放该文件，仍可通过时间轴与缩略图完成裁剪。"
                              IsOpen="True"
                              Visibility="{x:Bind ViewModel.PreviewFailed, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
 
                     <!-- 播放控制 -->
-                    <Grid ColumnSpacing="8">
+                    <Grid Grid.Row="2" Grid.ColumnSpan="3" ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
@@ -90,52 +113,56 @@
                     </Grid>
 
                     <!-- 时间轴：左右两个圆点即起止时间 -->
-                    <helpers:TrimTimeline x:Name="Timeline" />
+                    <helpers:TrimTimeline x:Name="Timeline" Grid.Row="3" Grid.ColumnSpan="3" />
 
-                    <!-- 起止时间与微调 -->
-                    <Grid ColumnSpacing="16">
+                    <!-- 起止时间与微调：窄模式布局（下方两列）；宽模式时两个块移到预览两侧 -->
+                    <Grid x:Name="BottomPanels" Grid.Row="4" Grid.ColumnSpan="3" ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <StackPanel Grid.Column="0" Spacing="6">
-                            <TextBlock Text="开始时间" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <Image x:Name="StartThumb" Height="90" Stretch="Uniform" HorizontalAlignment="Left" />
-                            <TextBlock Text="{x:Bind ViewModel.StartText, Mode=OneWay}"
-                                       FontFamily="Consolas" />
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <Button Content="−1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="-1" />
-                                <Button Content="−0.1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="-0.1" />
-                                <Button Content="设为当前位置" Command="{x:Bind ViewModel.SetStartToPositionCommand, Mode=OneWay}" />
-                                <Button Content="+0.1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="0.1" />
-                                <Button Content="+1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="1" />
+                        <Grid Grid.Column="0" x:Name="BottomSlotLeft">
+                            <StackPanel x:Name="StartPanel" Spacing="6" HorizontalAlignment="Left">
+                                <TextBlock Text="开始时间" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <Image x:Name="StartThumb" Height="90" Stretch="Uniform" HorizontalAlignment="Left" />
+                                <TextBlock Text="{x:Bind ViewModel.StartText, Mode=OneWay}"
+                                           FontFamily="Consolas" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <Button Content="−1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="-1" />
+                                    <Button Content="−0.1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="-0.1" />
+                                    <Button Content="设为当前位置" Command="{x:Bind ViewModel.SetStartToPositionCommand, Mode=OneWay}" />
+                                    <Button Content="+0.1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="0.1" />
+                                    <Button Content="+1s" Command="{x:Bind ViewModel.NudgeStartCommand, Mode=OneWay}" CommandParameter="1" />
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
+                        </Grid>
 
-                        <StackPanel Grid.Column="1" Spacing="6">
-                            <TextBlock Text="结束时间" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <Image x:Name="EndThumb" Height="90" Stretch="Uniform" HorizontalAlignment="Left" />
-                            <TextBlock Text="{x:Bind ViewModel.EndText, Mode=OneWay}"
-                                       FontFamily="Consolas" />
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <Button Content="−1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="-1" />
-                                <Button Content="−0.1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="-0.1" />
-                                <Button Content="设为当前位置" Command="{x:Bind ViewModel.SetEndToPositionCommand, Mode=OneWay}" />
-                                <Button Content="+0.1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="0.1" />
-                                <Button Content="+1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="1" />
+                        <Grid Grid.Column="1" x:Name="BottomSlotRight">
+                            <StackPanel x:Name="EndPanel" Spacing="6" HorizontalAlignment="Left">
+                                <TextBlock Text="结束时间" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <Image x:Name="EndThumb" Height="90" Stretch="Uniform" HorizontalAlignment="Left" />
+                                <TextBlock Text="{x:Bind ViewModel.EndText, Mode=OneWay}"
+                                           FontFamily="Consolas" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <Button Content="−1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="-1" />
+                                    <Button Content="−0.1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="-0.1" />
+                                    <Button Content="设为当前位置" Command="{x:Bind ViewModel.SetEndToPositionCommand, Mode=OneWay}" />
+                                    <Button Content="+0.1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="0.1" />
+                                    <Button Content="+1s" Command="{x:Bind ViewModel.NudgeEndCommand, Mode=OneWay}" CommandParameter="1" />
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
+                        </Grid>
                     </Grid>
 
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel Grid.Row="5" Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="8">
                         <TextBlock Text="选中片段" Opacity="0.7" VerticalAlignment="Center" />
                         <TextBlock Text="{x:Bind ViewModel.SelectionText, Mode=OneWay}"
                                    Style="{StaticResource BodyStrongTextBlockStyle}"
                                    FontFamily="Consolas" VerticalAlignment="Center" />
                         <Button Content="恢复整段" Command="{x:Bind ViewModel.ResetRangeCommand, Mode=OneWay}" />
                     </StackPanel>
-                </StackPanel>
+                </Grid>
             </Border>
 
             <!-- 输出与执行 -->
@@ -149,11 +176,13 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBox Grid.Column="0" Text="{x:Bind ViewModel.OutputPath, Mode=TwoWay}"
                                  PlaceholderText="输出路径（默认与源文件同目录）" />
                         <Button Grid.Column="1" Content="另存为…" Click="BrowseOutput_Click" />
-                        <Button Grid.Column="2" Content="打开" Command="{x:Bind ViewModel.OpenOutputFolderCommand, Mode=OneWay}" />
+                        <Button Grid.Column="2" Content="打开" Command="{x:Bind ViewModel.OpenOutputFolderCommand, Mode=OneWay}"
+                                IsEnabled="{x:Bind ViewModel.HasOutput, Mode=OneWay}" />
                     </Grid>
 
                     <ToggleSwitch x:Name="FastToggle"

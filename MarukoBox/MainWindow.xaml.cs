@@ -57,8 +57,25 @@ public sealed partial class MainWindow : Window
             }
 
             var frame = FindDescendant<Frame>(root);
-            var video = frame?.Content as VideoPage;
-            video?.ViewModel.SaveSession();
+
+            // 合并式保存：读出已有快照，只更新「当前可见页」对应的块，再整体写回，
+            // 避免视频页与裁剪页的「保持习惯」参数互相覆盖（此前只会保存视频页）。
+            var existing = ConfigService.LoadSession() ?? new MarukoBox.Models.SessionState();
+
+            var page = frame?.Content;
+            if (page is VideoPage video)
+            {
+                var snapshot = video.ViewModel.CaptureSession();
+                existing.Settings = snapshot.Settings;
+                existing.QualityPreset = snapshot.QualityPreset;
+                existing.OutputDir = snapshot.OutputDir;
+            }
+            else if (page is TrimPage trim)
+            {
+                existing.Trim = trim.ViewModel.CaptureTrimSession();
+            }
+
+            ConfigService.SaveSession(existing);
         }
         catch
         {
