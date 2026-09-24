@@ -17,7 +17,9 @@
 - 用户数据（`config.json` / `session.json`）位于 `%LOCALAPPDATA%\MarukoBox`，安装/覆盖不受影响。
 - 覆盖安装会自动静默卸载旧版并清掉已移除的旧文件。
 
-## 下载
+## 发布状态
 
-- GitHub：https://github.com/294970144/maruko-box/releases/tag/v1.7.3
-- Gitee：https://gitee.com/zhang-lin701442/maruko-box/releases/tag/v1.7.3
+1.7.3 未单独发布安装包，其全部改动（裁剪页修复与三列预览布局）已并入 **v1.7.4**，请直接下载 v1.7.4。
+
+- GitHub：https://github.com/294970144/maruko-box/releases/tag/v1.7.4
+- Gitee：https://gitee.com/zhang-lin701442/maruko-box/releases/tag/v1.7.4
