@@ -51,3 +51,7 @@ Desktop.ini
 
 # --- build temp logs (shell redirect artifacts) ---
 build_log.txt
+
+# AOCI agent host integration (machine-bound; do not commit)
+.codex/config.toml
+.codex/config.toml.backup.*
