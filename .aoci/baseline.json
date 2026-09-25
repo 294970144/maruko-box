@@ -1,172 +1,144 @@
 {
   "version": 1,
   "created_at": "2026-09-25T05:51:07Z",
-  "updated_at": "2026-09-25T05:51:07Z",
+  "updated_at": "2026-09-25T07:04:06Z",
   "files": {
     ".gitattributes": {
-      "role": "index",
       "sha256": "21fa16a2122e2b0360b47502c577428b645437e08e9e87ffba661f84853cb476",
       "size": 291,
       "normalized_sha256": "21fa16a2122e2b0360b47502c577428b645437e08e9e87ffba661f84853cb476"
     },
     ".gitignore": {
-      "role": "index",
       "sha256": "5b784a798c2ddc6717594065b81a16b63f94ed140ceb5ec5b465b98fe2a4dda7",
       "size": 1266,
       "normalized_sha256": "5b784a798c2ddc6717594065b81a16b63f94ed140ceb5ec5b465b98fe2a4dda7"
     },
     ".vscode/launch.json": {
-      "role": "index",
       "sha256": "c284925e4e4db3ca22cde153f145e20f672fa0b1aab580c783886636d2c657c8",
       "size": 217,
       "normalized_sha256": "c284925e4e4db3ca22cde153f145e20f672fa0b1aab580c783886636d2c657c8"
     },
     ".vscode/tasks.json": {
-      "role": "index",
       "sha256": "2346062df97f69fd461a5ede7808d5589328b1ce896d3b5dff0b9ab63c1fbd69",
       "size": 660,
       "normalized_sha256": "2346062df97f69fd461a5ede7808d5589328b1ce896d3b5dff0b9ab63c1fbd69"
     },
     "AGENTS.md": {
-      "role": "index",
       "sha256": "ddb50101a5be7eb54bde0bdccb2ce15fbac13a0efed1b2851adc248c7a39bcb7",
       "size": 13258,
       "normalized_sha256": "ddb50101a5be7eb54bde0bdccb2ce15fbac13a0efed1b2851adc248c7a39bcb7"
     },
     "Harness/AppStub.cs": {
-      "role": "index",
       "sha256": "8106d19f435ad266c04104c5949f7b6ec2d882b662e122c37ba63986510800cf",
       "size": 482,
       "normalized_sha256": "8106d19f435ad266c04104c5949f7b6ec2d882b662e122c37ba63986510800cf"
     },
     "Harness/Harness.csproj": {
-      "role": "index",
       "sha256": "a3da77bd24baa44219e0aae7924a69c5ce7fc32b94a9332b6c6c15477094bf58",
       "size": 1794,
       "normalized_sha256": "a3da77bd24baa44219e0aae7924a69c5ce7fc32b94a9332b6c6c15477094bf58"
     },
     "Harness/Program.cs": {
-      "role": "index",
       "sha256": "bb51f71cce468651881c9fa302282a8ac7ac6d467562d57580ec04ae8e4ec197",
       "size": 24014,
       "normalized_sha256": "76e97de5a66b0d9480f709e2496e0fd16a3da13e1f25fbcff3f3da9cf608d727"
     },
     "Installer-Inno/build-installer.ps1": {
-      "role": "index",
       "sha256": "b0c793445a77d0868f048e8dc8ebe947157b2b7bc4c484f470d2f51cd55884d3",
       "size": 4640,
       "normalized_sha256": "b0c793445a77d0868f048e8dc8ebe947157b2b7bc4c484f470d2f51cd55884d3"
     },
     "Installer-Inno/build.ps1": {
-      "role": "index",
       "sha256": "0ebfde18472388e568169022f3dfac12ee150ee3872afe1e9399a161bc2df662",
       "size": 3900,
       "normalized_sha256": "0ebfde18472388e568169022f3dfac12ee150ee3872afe1e9399a161bc2df662"
     },
     "Installer-Inno/marukobox.iss": {
-      "role": "index",
       "sha256": "bafb3715ee5e8b5f11b8cc9f12aeac3f89f51955ccaaa756f1478f1a36617756",
       "size": 5646,
       "normalized_sha256": "bafb3715ee5e8b5f11b8cc9f12aeac3f89f51955ccaaa756f1478f1a36617756"
     },
     "Installer-Inno/release-notes-v1.1.0.md": {
-      "role": "index",
       "sha256": "cddb2f373149cb60f74f814797cf43d429fcaa8c34e132d51494717c10e4ceb1",
       "size": 1256,
       "normalized_sha256": "cddb2f373149cb60f74f814797cf43d429fcaa8c34e132d51494717c10e4ceb1"
     },
     "Installer-Inno/release-notes-v1.2.0.md": {
-      "role": "index",
       "sha256": "abcf6abb440d943e54951436ab40f2c762a91218687948e973baca7534bfdd72",
       "size": 2258,
       "normalized_sha256": "abcf6abb440d943e54951436ab40f2c762a91218687948e973baca7534bfdd72"
     },
     "Installer-Inno/release-notes-v1.3.0.md": {
-      "role": "index",
       "sha256": "8aad2148a106f82b600bc3c5f0f7fda79a49e409bbc4a60bcb5f4cd3cb5fecc6",
       "size": 1688,
       "normalized_sha256": "8aad2148a106f82b600bc3c5f0f7fda79a49e409bbc4a60bcb5f4cd3cb5fecc6"
     },
     "Installer-Inno/release-notes-v1.4.0.md": {
-      "role": "index",
       "sha256": "aef77d5c8f7781f6204958aa33b22e8d7a6329b4fed85ad3833caa57fb643273",
       "size": 1088,
       "normalized_sha256": "aef77d5c8f7781f6204958aa33b22e8d7a6329b4fed85ad3833caa57fb643273"
     },
     "Installer-Inno/release-notes-v1.4.1.md": {
-      "role": "index",
       "sha256": "f134fc17f46d868d305300f642a2dfec21b69d237364431e0baf42be47ac1828",
       "size": 1271,
       "normalized_sha256": "f134fc17f46d868d305300f642a2dfec21b69d237364431e0baf42be47ac1828"
     },
     "Installer-Inno/release-notes-v1.5.0.md": {
-      "role": "index",
       "sha256": "b6c671acb55a0a83b7c4c6e663c648a01b1d6b7e4722a07f9c77c3ba091aa155",
       "size": 920,
       "normalized_sha256": "b6c671acb55a0a83b7c4c6e663c648a01b1d6b7e4722a07f9c77c3ba091aa155"
     },
     "Installer-Inno/release-notes-v1.5.1.md": {
-      "role": "index",
       "sha256": "9ffcf5e29131bd16c823b57544bf15478711ede1dd5ff17cf96099a77673edbf",
       "size": 684,
       "normalized_sha256": "9ffcf5e29131bd16c823b57544bf15478711ede1dd5ff17cf96099a77673edbf"
     },
     "Installer-Inno/release-notes-v1.6.0.md": {
-      "role": "index",
       "sha256": "07ac8ecb457c53e0a47ed3acb65ebca4739c53882edf88cab2cbfbac01867db4",
       "size": 1576,
       "normalized_sha256": "07ac8ecb457c53e0a47ed3acb65ebca4739c53882edf88cab2cbfbac01867db4"
     },
     "Installer-Inno/release-notes-v1.7.0.md": {
-      "role": "index",
       "sha256": "627649162c444fd8a04b408d7150e1f3d9dd0dc43dd65d74d37ecf410554b546",
       "size": 2097,
       "normalized_sha256": "627649162c444fd8a04b408d7150e1f3d9dd0dc43dd65d74d37ecf410554b546"
     },
     "Installer-Inno/release-notes-v1.7.1.md": {
-      "role": "index",
       "sha256": "efe271048cc532ad63e901e50547b34234ba983266462d4e9472979f5f284dd3",
       "size": 3472,
       "normalized_sha256": "efe271048cc532ad63e901e50547b34234ba983266462d4e9472979f5f284dd3"
     },
     "Installer-Inno/release-notes-v1.7.2.md": {
-      "role": "index",
       "sha256": "d64f51663fee54c9a107f8aee4b9c6b6c3749664581432d5a2efedd5072be11f",
       "size": 4594,
       "normalized_sha256": "d64f51663fee54c9a107f8aee4b9c6b6c3749664581432d5a2efedd5072be11f"
     },
     "Installer-Inno/release-notes-v1.7.4.md": {
-      "role": "index",
       "sha256": "fd29d56f42cbb3a604fb985fd9f240d9f7d81b7d25ccbba01cbf33c5afc6d0ce",
       "size": 2212,
       "normalized_sha256": "fd29d56f42cbb3a604fb985fd9f240d9f7d81b7d25ccbba01cbf33c5afc6d0ce"
     },
     "LICENSE": {
-      "role": "index",
       "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
       "size": 35149,
       "normalized_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
     },
     "MarukoBox/.gitignore": {
-      "role": "index",
       "sha256": "41cfcb6ec924a2ce44d6ee53a90d55ae9c7898c2a573d9032447b2b8fce33595",
       "size": 659,
       "normalized_sha256": "e40e8fecc911bad94df331abb1ff34a17ad433275e4901a54495c2941751effb"
     },
     "MarukoBox/App.xaml": {
-      "role": "index",
       "sha256": "9d18fdf265f5b65d3977e4c941a7f7241c61e72732657b03a46a6ab08cefd941",
       "size": 681,
       "normalized_sha256": "35c6c965c6a30df8c87c3c3bd53de722542d516c8694673dceea28dc6b51cf3b"
     },
     "MarukoBox/App.xaml.cs": {
-      "role": "index",
       "sha256": "9c45721323d96c3ae8a21f1444a57193b5f6b3fa47661aef927f45100db874f9",
       "size": 9631,
       "normalized_sha256": "1eacbfda7eeed052c39310c91692a58dc9ad56dde2ce23051d86984987530a6e"
     },
     "MarukoBox/AppServices.cs": {
-      "role": "index",
       "sha256": "af301f592febe5c2110f8ef997ad95a3c266b8139a98b1d7b58fd63b8abaf513",
       "size": 829,
       "normalized_sha256": "af301f592febe5c2110f8ef997ad95a3c266b8139a98b1d7b58fd63b8abaf513"
@@ -217,430 +189,359 @@
       "size": 5843
     },
     "MarukoBox/Converters/Converters.cs": {
-      "role": "index",
       "sha256": "c1c9f41e65a1b268975fde8f48dec874d62959abcd11d18fd72560a808d57fec",
       "size": 8970,
       "normalized_sha256": "c1c9f41e65a1b268975fde8f48dec874d62959abcd11d18fd72560a808d57fec"
     },
     "MarukoBox/Helpers/FileDropHelper.cs": {
-      "role": "index",
       "sha256": "a2a1ef976d9a7da769f3e05cd40a3d3f5399bff6d4857c72b31f74e8b59bfa26",
       "size": 7219,
       "normalized_sha256": "a2a1ef976d9a7da769f3e05cd40a3d3f5399bff6d4857c72b31f74e8b59bfa26"
     },
     "MarukoBox/Helpers/OutputNaming.cs": {
-      "role": "index",
       "sha256": "31bb15486fad3cecf3c4e236de6e5748d11ffddd7ef9cfc18f964569fdb4a5fb",
       "size": 7565,
       "normalized_sha256": "31bb15486fad3cecf3c4e236de6e5748d11ffddd7ef9cfc18f964569fdb4a5fb"
     },
     "MarukoBox/Helpers/OutputPathHelper.cs": {
-      "role": "index",
       "sha256": "447fd62b72e157654d0930682cb06341eb613d1ae74537d32bf0cef5f4a143dc",
       "size": 867,
       "normalized_sha256": "447fd62b72e157654d0930682cb06341eb613d1ae74537d32bf0cef5f4a143dc"
     },
     "MarukoBox/Helpers/PickerHelper.cs": {
-      "role": "index",
       "sha256": "d33118035b70eba02f0933f264d6dfb548c2bce1e9cb8e7ee31c1e4a19ebdb77",
       "size": 835,
       "normalized_sha256": "d33118035b70eba02f0933f264d6dfb548c2bce1e9cb8e7ee31c1e4a19ebdb77"
     },
     "MarukoBox/Helpers/ShellHelper.cs": {
-      "role": "index",
       "sha256": "b407dfd480bc51990f5542394646fc5f984a7145577b8b39117a5fa832f8963f",
       "size": 2489,
       "normalized_sha256": "b407dfd480bc51990f5542394646fc5f984a7145577b8b39117a5fa832f8963f"
     },
     "MarukoBox/Helpers/TrimTimeline.xaml": {
-      "role": "index",
       "sha256": "49561d31ab8cf1425cc01bd1998f08d2ebecf0aa382107b59fa5de2ae7c8c86f",
       "size": 3865,
       "normalized_sha256": "5914a4e18b4dc453b6f02e4f79abe67699fc22229add4e66b591e7cb4ea605aa"
     },
     "MarukoBox/Helpers/TrimTimeline.xaml.cs": {
-      "role": "index",
       "sha256": "19e96c48488de8f08e93c34e3fd2d8555d880e6ee17f6e85c3c0a1e967c69811",
       "size": 10763,
       "normalized_sha256": "19e96c48488de8f08e93c34e3fd2d8555d880e6ee17f6e85c3c0a1e967c69811"
     },
     "MarukoBox/MainWindow.xaml": {
-      "role": "index",
       "sha256": "0a7884902ca9419063b82d32fc4fabddb96d5b2de803ba188f85c64911ed3852",
       "size": 4021,
       "normalized_sha256": "8abf67aa469594221dac3fe1b5a51c879dbb0580ca1c4360a950277868f61000"
     },
     "MarukoBox/MainWindow.xaml.cs": {
-      "role": "index",
       "sha256": "8f79a51e944b304b1de42b5883f9d3ef437a7cf0b21a514c6e241bb5ada8feca",
       "size": 5150,
       "normalized_sha256": "f0eb0697ea48850ccb905b6073b13c3818a9a0a735fd5b94f285479a88ee49b3"
     },
     "MarukoBox/MarukoBox.csproj": {
-      "role": "index",
       "sha256": "170c1e3650ecbca3c0ca325250b38c83a153f900a68357da85af610fbbfd819d",
       "size": 6506,
       "normalized_sha256": "170c1e3650ecbca3c0ca325250b38c83a153f900a68357da85af610fbbfd819d"
     },
     "MarukoBox/Models/AudioPreset.cs": {
-      "role": "index",
       "sha256": "72376e68ddf0341857dadce9ceadf85458a06e68e607415a7ce10760f775eec3",
       "size": 786,
       "normalized_sha256": "72376e68ddf0341857dadce9ceadf85458a06e68e607415a7ce10760f775eec3"
     },
     "MarukoBox/Models/EncodeItem.cs": {
-      "role": "index",
       "sha256": "52b940c629dc9ea0c916cfce9bd2475f81d2eb6c876461105cf98781fdc7a49e",
       "size": 2683,
       "normalized_sha256": "52b940c629dc9ea0c916cfce9bd2475f81d2eb6c876461105cf98781fdc7a49e"
     },
     "MarukoBox/Models/EncodeProgress.cs": {
-      "role": "index",
       "sha256": "b78a5ce0fda30650a74a2bca6e4b7d8f91e2aad1c7a2c317de5e1e035d89b145",
       "size": 2168,
       "normalized_sha256": "b78a5ce0fda30650a74a2bca6e4b7d8f91e2aad1c7a2c317de5e1e035d89b145"
     },
     "MarukoBox/Models/EncodeSettings.cs": {
-      "role": "index",
       "sha256": "d801480ce4246c96256d7da29e7dbe20257891c6882192a00887c7e195b582d8",
       "size": 5949,
       "normalized_sha256": "d801480ce4246c96256d7da29e7dbe20257891c6882192a00887c7e195b582d8"
     },
     "MarukoBox/Models/EncoderOption.cs": {
-      "role": "index",
       "sha256": "932e5f6625f6b09be6914df5540305339357df58996043fb15d1484cbe39b79d",
       "size": 366,
       "normalized_sha256": "932e5f6625f6b09be6914df5540305339357df58996043fb15d1484cbe39b79d"
     },
     "MarukoBox/Models/EncoderType.cs": {
-      "role": "index",
       "sha256": "dd3e939fe4a9117cdafec09dc55e4f471961a4c783304cfa57f4fe6b128cd7b7",
       "size": 2457,
       "normalized_sha256": "dd3e939fe4a9117cdafec09dc55e4f471961a4c783304cfa57f4fe6b128cd7b7"
     },
     "MarukoBox/Models/FfmpegReleaseRow.cs": {
-      "role": "index",
       "sha256": "0ec82029450878535a0da78371eb7eb79202c2cd8611ca797105a148328f9bc9",
       "size": 2839,
       "normalized_sha256": "0ec82029450878535a0da78371eb7eb79202c2cd8611ca797105a148328f9bc9"
     },
     "MarukoBox/Models/FrameExtractOptions.cs": {
-      "role": "index",
       "sha256": "b7b351e0fd7a0bd6ba73c9dddfc00cbbb1ce14a9ac1c2e779b2913e1055eda8a",
       "size": 1113,
       "normalized_sha256": "b7b351e0fd7a0bd6ba73c9dddfc00cbbb1ce14a9ac1c2e779b2913e1055eda8a"
     },
     "MarukoBox/Models/GpuInfo.cs": {
-      "role": "index",
       "sha256": "39498908c7f33d12746fd269a2fd2546d3c350fa5a75cd0229e40d9a91e79c7d",
       "size": 2927,
       "normalized_sha256": "39498908c7f33d12746fd269a2fd2546d3c350fa5a75cd0229e40d9a91e79c7d"
     },
     "MarukoBox/Models/MediaFileInfo.cs": {
-      "role": "index",
       "sha256": "c844f2fb9434b0fc55f0c0d3e2a9d8abbe6de79ea56df17bc6ff1a9e2d097e5c",
       "size": 749,
       "normalized_sha256": "c844f2fb9434b0fc55f0c0d3e2a9d8abbe6de79ea56df17bc6ff1a9e2d097e5c"
     },
     "MarukoBox/Models/MediaStreamInfo.cs": {
-      "role": "index",
       "sha256": "a444e7582555efafee1237f0622b4c6cfd09d4735411f7c4fcf819cf1c1daf6e",
       "size": 2123,
       "normalized_sha256": "a444e7582555efafee1237f0622b4c6cfd09d4735411f7c4fcf819cf1c1daf6e"
     },
     "MarukoBox/Models/MuxInput.cs": {
-      "role": "index",
       "sha256": "496eb05001f10df702168c473a09e113881938fd0c734891e12669c4b3453203",
       "size": 2363,
       "normalized_sha256": "496eb05001f10df702168c473a09e113881938fd0c734891e12669c4b3453203"
     },
     "MarukoBox/Models/OptionEntry.cs": {
-      "role": "index",
       "sha256": "5a652170c559ad153ba282b02c76cb26f4be12015f29247bee1c4752eb088d0d",
       "size": 378,
       "normalized_sha256": "5a652170c559ad153ba282b02c76cb26f4be12015f29247bee1c4752eb088d0d"
     },
     "MarukoBox/Models/QualityPresets.cs": {
-      "role": "index",
       "sha256": "cd9529d0299e757d1997c4f8866b81d66a9438ddc44c0a82ec50001f4dfd56de",
       "size": 2284,
       "normalized_sha256": "cd9529d0299e757d1997c4f8866b81d66a9438ddc44c0a82ec50001f4dfd56de"
     },
     "MarukoBox/Models/SessionState.cs": {
-      "role": "index",
       "sha256": "379a0f16824f9b30f1e10babab8bcca66e69d6c2d327bce3a9084256cbd2e85b",
       "size": 4567,
       "normalized_sha256": "379a0f16824f9b30f1e10babab8bcca66e69d6c2d327bce3a9084256cbd2e85b"
     },
     "MarukoBox/Models/TrimRequest.cs": {
-      "role": "index",
       "sha256": "15fd581d64b2baf2c3f91b70ae7e86597532bf45fbb5f53671039dbca0166705",
       "size": 1638,
       "normalized_sha256": "15fd581d64b2baf2c3f91b70ae7e86597532bf45fbb5f53671039dbca0166705"
     },
     "MarukoBox/Package.appxmanifest": {
-      "role": "index",
       "sha256": "def2f4e81bb2ca85d75155cbf9ee47cf75cb59a7a0f63b67bc6cc65ad4d60441",
       "size": 1944,
       "normalized_sha256": "def2f4e81bb2ca85d75155cbf9ee47cf75cb59a7a0f63b67bc6cc65ad4d60441"
     },
     "MarukoBox/Pages/AboutPage.xaml": {
-      "role": "index",
       "sha256": "bfdab1e4d2f047475a9aa2d48b6979cf1039ad9d3830a44593edb73ec35666a6",
       "size": 1301,
       "normalized_sha256": "bfdab1e4d2f047475a9aa2d48b6979cf1039ad9d3830a44593edb73ec35666a6"
     },
     "MarukoBox/Pages/AboutPage.xaml.cs": {
-      "role": "index",
       "sha256": "4c2586e845009a6fa9d9e88664d3342df439f9b41ab090385179172c1c0cc2fe",
       "size": 489,
       "normalized_sha256": "4c2586e845009a6fa9d9e88664d3342df439f9b41ab090385179172c1c0cc2fe"
     },
     "MarukoBox/Pages/AudioPage.xaml": {
-      "role": "index",
       "sha256": "bedc2ab3b5bde80aa2fd1bd091500c2e80bfe1a714cc724ed63bebc3568b9f6e",
       "size": 13193,
       "normalized_sha256": "bedc2ab3b5bde80aa2fd1bd091500c2e80bfe1a714cc724ed63bebc3568b9f6e"
     },
     "MarukoBox/Pages/AudioPage.xaml.cs": {
-      "role": "index",
       "sha256": "b053632c55543ee579c5f695ec4e60046d6bc153fb3294caae75c35356b687c3",
       "size": 2817,
       "normalized_sha256": "b053632c55543ee579c5f695ec4e60046d6bc153fb3294caae75c35356b687c3"
     },
     "MarukoBox/Pages/ExtractPage.xaml": {
-      "role": "index",
       "sha256": "d2d7f024acbec4d91f1a7aa70419471ae95ea8a4eeda94b0d5fbc8b94a6b5783",
       "size": 10661,
       "normalized_sha256": "d2d7f024acbec4d91f1a7aa70419471ae95ea8a4eeda94b0d5fbc8b94a6b5783"
     },
     "MarukoBox/Pages/ExtractPage.xaml.cs": {
-      "role": "index",
       "sha256": "f1e0bb7d3d1494cbc9d6b8d5c44c5b80905c81d2a97819c5dde3d5a86fbab927",
       "size": 2925,
       "normalized_sha256": "f1e0bb7d3d1494cbc9d6b8d5c44c5b80905c81d2a97819c5dde3d5a86fbab927"
     },
     "MarukoBox/Pages/ImagePage.xaml": {
-      "role": "index",
       "sha256": "f4ac89125462f1ab761fa3c5f01ec4015bb96fde85922e54e0bc37e290ef008c",
       "size": 12175,
       "normalized_sha256": "f4ac89125462f1ab761fa3c5f01ec4015bb96fde85922e54e0bc37e290ef008c"
     },
     "MarukoBox/Pages/ImagePage.xaml.cs": {
-      "role": "index",
       "sha256": "4a60622096661cd1f8d3afa58260a1ac5d233513876d03b137ec42264640561a",
       "size": 4728,
       "normalized_sha256": "4a60622096661cd1f8d3afa58260a1ac5d233513876d03b137ec42264640561a"
     },
     "MarukoBox/Pages/MuxPage.xaml": {
-      "role": "index",
       "sha256": "7e5fc7e1477e9ab9b82d565d46e810f68e4eed7338502602ee4804bbe63fb36b",
       "size": 10800,
       "normalized_sha256": "7e5fc7e1477e9ab9b82d565d46e810f68e4eed7338502602ee4804bbe63fb36b"
     },
     "MarukoBox/Pages/MuxPage.xaml.cs": {
-      "role": "index",
       "sha256": "a9465c7c693274f0a73b989fbcc5554c690d29af335cacd322aeb4786f61d528",
       "size": 5260,
       "normalized_sha256": "a9465c7c693274f0a73b989fbcc5554c690d29af335cacd322aeb4786f61d528"
     },
     "MarukoBox/Pages/PlaceholderPage.xaml": {
-      "role": "index",
       "sha256": "6359bd00812c080d2268d79a16060d5f385e99a5e12ecdbd20cbd3ece50379ec",
       "size": 903,
       "normalized_sha256": "6359bd00812c080d2268d79a16060d5f385e99a5e12ecdbd20cbd3ece50379ec"
     },
     "MarukoBox/Pages/PlaceholderPage.xaml.cs": {
-      "role": "index",
       "sha256": "8ef3abcabfdde014201b71df299526ffd14fb4a558e45758405c4e7f7663f18d",
       "size": 565,
       "normalized_sha256": "8ef3abcabfdde014201b71df299526ffd14fb4a558e45758405c4e7f7663f18d"
     },
     "MarukoBox/Pages/SettingsPage.xaml": {
-      "role": "index",
       "sha256": "64583a833b634e47192cd4f2cbfb27453a3653ef94c6caa23dc7435a457286ec",
       "size": 24534,
       "normalized_sha256": "64583a833b634e47192cd4f2cbfb27453a3653ef94c6caa23dc7435a457286ec"
     },
     "MarukoBox/Pages/SettingsPage.xaml.cs": {
-      "role": "index",
       "sha256": "64507a71bcbb27c8baacda284034f0d64453ad26078a6049d9ecac754aead7f7",
       "size": 380,
       "normalized_sha256": "64507a71bcbb27c8baacda284034f0d64453ad26078a6049d9ecac754aead7f7"
     },
     "MarukoBox/Pages/SubtitlePage.xaml": {
-      "role": "index",
       "sha256": "515ca3f5d0cfbd760ca23e7c7a53043439e42e07094f81fe7f590bfe52e1d112",
       "size": 15942,
       "normalized_sha256": "515ca3f5d0cfbd760ca23e7c7a53043439e42e07094f81fe7f590bfe52e1d112"
     },
     "MarukoBox/Pages/SubtitlePage.xaml.cs": {
-      "role": "index",
       "sha256": "a2fd9fc98c8644d9c31b05f6c59e99dbb4e7422d16f8f74a17e53066f4f423ba",
       "size": 6953,
       "normalized_sha256": "a2fd9fc98c8644d9c31b05f6c59e99dbb4e7422d16f8f74a17e53066f4f423ba"
     },
     "MarukoBox/Pages/ToolsPage.xaml": {
-      "role": "index",
       "sha256": "cd3bd7d345fab43eec6d2998595467a4f970f38f8a985f4d3fbb619980926bcf",
       "size": 6930,
       "normalized_sha256": "cd3bd7d345fab43eec6d2998595467a4f970f38f8a985f4d3fbb619980926bcf"
     },
     "MarukoBox/Pages/ToolsPage.xaml.cs": {
-      "role": "index",
       "sha256": "50cf91afd03be1b9a68ff4d71fa70ce29173081929bd3e9fc37cab2216e19f21",
       "size": 2656,
       "normalized_sha256": "50cf91afd03be1b9a68ff4d71fa70ce29173081929bd3e9fc37cab2216e19f21"
     },
     "MarukoBox/Pages/TrimPage.xaml": {
-      "role": "index",
       "sha256": "2d1ff043e77f0b6b9456057b172ec548fcfe3b949198147da660b0aed437bebb",
       "size": 16120,
       "normalized_sha256": "2d1ff043e77f0b6b9456057b172ec548fcfe3b949198147da660b0aed437bebb"
     },
     "MarukoBox/Pages/TrimPage.xaml.cs": {
-      "role": "index",
       "sha256": "99e1bcd7a7cf5625a9b335b0f2543f66f0e4cda256f6ebdc4d0cb3c620dac949",
       "size": 17503,
       "normalized_sha256": "99e1bcd7a7cf5625a9b335b0f2543f66f0e4cda256f6ebdc4d0cb3c620dac949"
     },
     "MarukoBox/Pages/VideoPage.xaml": {
-      "role": "index",
       "sha256": "1f8ab4bf0c3aa4ec33933d2034e00b024569df77195e0209fbb788095ffd4ec5",
       "size": 26945,
       "normalized_sha256": "1f8ab4bf0c3aa4ec33933d2034e00b024569df77195e0209fbb788095ffd4ec5"
     },
     "MarukoBox/Pages/VideoPage.xaml.cs": {
-      "role": "index",
       "sha256": "6561950017239c71b477037cb3e8b18f8f60933fa69b94fb8847912d453fa669",
       "size": 3102,
       "normalized_sha256": "6561950017239c71b477037cb3e8b18f8f60933fa69b94fb8847912d453fa669"
     },
     "MarukoBox/Properties/PublishProfiles/win-arm64.pubxml": {
-      "role": "index",
       "sha256": "b0088e45e2f4ccc36f674cad06bd8634e3297192d13b4e6872f190c37f8b9a67",
       "size": 570,
       "normalized_sha256": "171978f519b64fa1df48e6fb453304bbab4c389b5d8213968d7b003bd093b0b9"
     },
     "MarukoBox/Properties/PublishProfiles/win-x64.pubxml": {
-      "role": "index",
       "sha256": "0ade15d26cee00a4123baa0c3d05d0ee89a2b081ffd0a6ce0f5193a2f5480de6",
       "size": 566,
       "normalized_sha256": "ff0f7d66deca464f3d352978b1af00d9daa924f294633d1ba83ad649652da970"
     },
     "MarukoBox/Properties/PublishProfiles/win-x86.pubxml": {
-      "role": "index",
       "sha256": "3a94e0b26a0109f0e718cec016e890e74930249acb06ce2c9e3f923094722df3",
       "size": 566,
       "normalized_sha256": "c8fb6d9c7ec059ecbb77f6df9754dc4951b73b7a0aa5381d8c95b9a96ea19805"
     },
     "MarukoBox/Properties/launchSettings.json": {
-      "role": "index",
       "sha256": "93b4588fb7a5c1509743fd96eb38c148f171c56d86fd09a9ffb59eeee7e1317a",
       "size": 172,
       "normalized_sha256": "835b94f6965f9faa8505ce62ddb0e1fecde1e916d62829ab82f1edbb23d22ceb"
     },
     "MarukoBox/Services/ConfigService.cs": {
-      "role": "index",
       "sha256": "9fd482f1f738d4fc31ab44b24312fc0e3f9095a37a6b9444b3129b14afc4b581",
       "size": 13612,
       "normalized_sha256": "9fd482f1f738d4fc31ab44b24312fc0e3f9095a37a6b9444b3129b14afc4b581"
     },
     "MarukoBox/Services/FfmpegService.cs": {
-      "role": "index",
       "sha256": "e5a5eead5967e9686b56c4beb4d887628c0086995587bfc5911c17f2314b0ec5",
       "size": 49970,
       "normalized_sha256": "e5a5eead5967e9686b56c4beb4d887628c0086995587bfc5911c17f2314b0ec5"
     },
     "MarukoBox/Services/GpuDetectionService.cs": {
-      "role": "index",
       "sha256": "8393857a98ac51d4f751b39dc1648f5782a078f114e3b0eaa2990d2d835a4e21",
       "size": 10528,
       "normalized_sha256": "8393857a98ac51d4f751b39dc1648f5782a078f114e3b0eaa2990d2d835a4e21"
     },
     "MarukoBox/Services/UpdateService.cs": {
-      "role": "index",
       "sha256": "c22387a4a145962b1251665e7b448f2652e1bf5c42335efd5aacb5def7becedd",
       "size": 40158,
       "normalized_sha256": "c22387a4a145962b1251665e7b448f2652e1bf5c42335efd5aacb5def7becedd"
     },
     "MarukoBox/ViewModels/AudioViewModel.cs": {
-      "role": "index",
       "sha256": "a3499a66e2751f597f9996b0fd9516a29a9c2fa3b1103bad448b836bcc9bf714",
       "size": 10711,
       "normalized_sha256": "a3499a66e2751f597f9996b0fd9516a29a9c2fa3b1103bad448b836bcc9bf714"
     },
     "MarukoBox/ViewModels/ExtractViewModel.cs": {
-      "role": "index",
       "sha256": "ea4fb217799dc8c510f5a12f80dd81427db6c9e53ab70ace67fe14f5ac000b1a",
       "size": 6634,
       "normalized_sha256": "ea4fb217799dc8c510f5a12f80dd81427db6c9e53ab70ace67fe14f5ac000b1a"
     },
     "MarukoBox/ViewModels/ImageViewModel.cs": {
-      "role": "index",
       "sha256": "26c9adf74e09167e26845708be0df6830f6c562698b57387ac41afebd47dc139",
       "size": 7323,
       "normalized_sha256": "26c9adf74e09167e26845708be0df6830f6c562698b57387ac41afebd47dc139"
     },
     "MarukoBox/ViewModels/MuxViewModel.cs": {
-      "role": "index",
       "sha256": "d5ef7898883f80400e1b0b97585acf2a31afb0d73875f33c93b66906a8589e28",
       "size": 6737,
       "normalized_sha256": "d5ef7898883f80400e1b0b97585acf2a31afb0d73875f33c93b66906a8589e28"
     },
     "MarukoBox/ViewModels/SettingsViewModel.cs": {
-      "role": "index",
       "sha256": "297de6c5985a49793ac0458fa597fea6380adaa73aae014909d1dad91ccf3c5d",
       "size": 31402,
       "normalized_sha256": "575fe7e4d4120f6152bb65f573ee162053a1312fd7ded7fa28dbe7ecb9d2f579"
     },
     "MarukoBox/ViewModels/SubtitleViewModel.cs": {
-      "role": "index",
       "sha256": "0ea9ca3d94ff7d4ccd50e166e7b553888789a4c5790e100c7555e600b330d6d0",
       "size": 9838,
       "normalized_sha256": "0ea9ca3d94ff7d4ccd50e166e7b553888789a4c5790e100c7555e600b330d6d0"
     },
     "MarukoBox/ViewModels/ToolsViewModel.cs": {
-      "role": "index",
       "sha256": "131c415599cc75fc6548e60270cd2546c1e7a182b0768d25549896a4f887cfa2",
       "size": 2073,
       "normalized_sha256": "131c415599cc75fc6548e60270cd2546c1e7a182b0768d25549896a4f887cfa2"
     },
     "MarukoBox/ViewModels/TrimViewModel.cs": {
-      "role": "index",
       "sha256": "73a689493397a5cd66f1023b2787e9be9e02503050e376757dda6cb3fb6705f0",
       "size": 20269,
       "normalized_sha256": "73a689493397a5cd66f1023b2787e9be9e02503050e376757dda6cb3fb6705f0"
     },
     "MarukoBox/ViewModels/VideoViewModel.cs": {
-      "role": "index",
       "sha256": "2358e90957c0aeda697db49efe76a97d7089a677b4959365033847e7eba9a114",
       "size": 34476,
       "normalized_sha256": "2358e90957c0aeda697db49efe76a97d7089a677b4959365033847e7eba9a114"
     },
     "MarukoBox/app.manifest": {
-      "role": "index",
       "sha256": "56b7fbeeaa8a743c611f0173dc8054686d1829e7ee8aca94525b96f802043e28",
       "size": 1023,
       "normalized_sha256": "56b7fbeeaa8a743c611f0173dc8054686d1829e7ee8aca94525b96f802043e28"
     },
     "README.md": {
-      "role": "index",
       "sha256": "3c6f98d4ffea4e9d1e23f856179525e37b40d930ecc6b77be0b662a6d64b029b",
       "size": 3797,
       "normalized_sha256": "3c6f98d4ffea4e9d1e23f856179525e37b40d930ecc6b77be0b662a6d64b029b"
     },
     "THIRD-PARTY-NOTICES.md": {
-      "role": "index",
       "sha256": "15dfea37fcf28d753684bf21a8abff53f5baf5686ed1f39b3f92edcca81d06f5",
       "size": 1592,
       "normalized_sha256": "15dfea37fcf28d753684bf21a8abff53f5baf5686ed1f39b3f92edcca81d06f5"
     },
     "aoci.code.txt": {
-      "role": "index",
-      "sha256": "12cbc237b863041b3ab7b6c6330091964cb014a20e624ec1f88de6056aed56c2",
-      "size": 21,
-      "normalized_sha256": "12cbc237b863041b3ab7b6c6330091964cb014a20e624ec1f88de6056aed56c2"
+      "sha256": "e708d2ceaa4e85823de8e02560dd21a1b8fbe1f6d58af4ec38343cf3d21ae1cd",
+      "size": 26469,
+      "normalized_sha256": "e708d2ceaa4e85823de8e02560dd21a1b8fbe1f6d58af4ec38343cf3d21ae1cd"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -680,7 +581,6 @@
       "size": 87800
     },
     "maruko-box.slnx": {
-      "role": "index",
       "sha256": "398ed06e1ff4660a8d731f9b73b4d8441970448aa78fe8b6ca2b77113b182b13",
       "size": 119,
       "normalized_sha256": "d4ab2ff9ad6fd82aab73de860d82abda374139572438f5d08f4f02e4c730cbb3"

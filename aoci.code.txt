@@ -1,1 +1,126 @@
 #AOCI-CODE-VOLUME: 1
+
+===E:/Git/WorkBuddy/日常/maruko-box/===
+.gitattributes[FR5T]: F:统一全平台文本文件 LF 行尾检出 | R:- | A:- | S:-
+.gitignore[FR5T]: F:声明版本控制忽略范围（构建产物、依赖、宿主配置） | R:- | A:- | S:-
+AGENTS.md[SG7M]: F:宿主代理纪律合同，含 AOCI 认知维护区块与运行合同摘要 | R:code:aoci.txt | A:- | S:-
+LICENSE[SG4T]: F:项目整体许可证文本（GNU GPL v3） | R:- | A:- | S:-
+README.md[SG6T]: F:项目说明：定位、功能清单、技术栈、仓库结构与构建发布指引 | R:code:MarukoBox/MarukoBox.csproj,code:Installer-Inno/build-installer.ps1 | A:- | S:-
+THIRD-PARTY-NOTICES.md[SG5T]: F:第三方组件与许可证义务说明：jellyfin-ffmpeg、运行时与框架依赖 | R:code:LICENSE | A:- | S:捆绑 jellyfin-ffmpeg 的 GPL 源码提供义务由上游项目承担
+maruko-box.slnx[XV4T]: F:解决方案清单（slnx 格式）：Harness 冒烟工程 + MarukoBox 主工程 | R:code:MarukoBox/MarukoBox.csproj,code:Harness/Harness.csproj | A:- | S:-
+
+===E:/Git/WorkBuddy/日常/maruko-box/.vscode/===
+launch.json[XG4T]: F:VS Code 附加式 C# 调试配置 | R:code:.vscode/tasks.json | A:- | S:本机无 Visual Studio IDE，WinUI 3 调试只能先运行程序再 F5 附加进程
+tasks.json[XG4T]: F:定义 Debug 构建与运行任务 | R:code:.vscode/launch.json | A:- | S:WinUI 3 工程仅支持 x64 平台，Any CPU 无法构建
+
+===E:/Git/WorkBuddy/日常/maruko-box/Harness/===
+AppStub.cs[TQ5T]: F:无 UI 冒烟环境的 App 测试桩，仅提供崩溃与信息日志方法 | R:code:Harness/Program.cs | A:- | S:-
+Harness.csproj[FV6S]: F:冒烟工程编译配置，直接引用 MarukoBox.csproj 的目标框架 | R:code:Harness/Program.cs | A:- | S:以 Compile Include 复用主工程源码；主工程新增 Model/Service 后必须同步加入该清单，否则冒烟仍执行旧代码
+Program.cs[EG7L]: F:冒烟 CLI 入口，按场景开关执行编码、更新、自愈、裁剪四类冒烟并断言关键参数 | R:code:Harness/AppStub.cs,code:MarukoBox/Services/FfmpegService.cs,code:MarukoBox/Services/ConfigService.cs | A:Harness.exe [update|recover|trim 视频路径 [起点秒] [时长秒]] | S:编码冒烟素材经 MB_TEST_SRC/MB_TEST_OUT 环境变量覆盖，缺省路径指向作者本机目录，换机冒烟必设
+
+===E:/Git/WorkBuddy/日常/maruko-box/Installer-Inno/===
+build-installer.ps1[OV8S]: F:一键构建安装包全链：dotnet publish、捆绑内置 ffmpeg、iscc 编译、dist 产物存在性核对 | R:code:Installer-Inno/build.ps1,code:Installer-Inno/marukobox.iss | A:pwsh -File build-installer.ps1 [-KeepPayload] [-FfmpegZip zip路径] | S:ffmpeg 便携 zip 放 third_party\ 自动发现；VERSION 标记由 zip 文件名正则解析，命名偏离 jellyfin-ffmpeg_版本-portable 模式会使版本探测落空
+build.ps1[OV7T]: F:定位 ISCC 编译器并编译 .iss 生成安装包 | R:code:Installer-Inno/marukobox.iss,code:Installer-Inno/build-installer.ps1 | A:pwsh -File build.ps1 [-PayloadDir 目录] [-OutDir 目录] [-IsccPath 路径] | S:iscc 退出码必须显式 exit 传出，否则编译失败会被上游判为成功；.iss 含中文须 UTF-8 BOM
+marukobox.iss[OV8S]: F:Inno Setup 安装脚本，零 UAC 当前用户级安装 | R:code:Installer-Inno/build-installer.ps1 | A:- | S:手工 ISCC 编译时 PayloadDir 默认 C:\mb_payload，必须先注入 ffmpeg\ 子目录与 VERSION 文件，否则安装包静默缺失内置 ffmpeg
+release-notes-v1.1.0.md[SG4T]: F:v1.1.0 发行说明：基于小丸工具箱理念重做的现代化开箱即用首版 | R:- | A:- | S:-
+release-notes-v1.2.0.md[SG4T]: F:v1.2.0 发行说明：更新机制重构、用户分级与安装包元数据修复 | R:- | A:- | S:-
+release-notes-v1.3.0.md[SG4T]: F:v1.3.0 发行说明：ffmpeg 更新改为按本机驱动兼容性过滤推荐 | R:- | A:- | S:-
+release-notes-v1.4.0.md[SG4T]: F:v1.4.0 发行说明：界面调整，视频页输出文件夹移至右侧 | R:- | A:- | S:-
+release-notes-v1.4.1.md[SG4T]: F:v1.4.1 发行说明：热修质量四档失效（P0）及多项安全稳定性问题 | R:- | A:- | S:-
+release-notes-v1.5.0.md[SG4T]: F:v1.5.0 发行说明：输出命名自定义、全新图标、拖放与更新源改进 | R:- | A:- | S:-
+release-notes-v1.5.1.md[SG4T]: F:v1.5.1 发行说明：修复编码进度恒定 100%（out_time_ms 实为微秒单位） | R:- | A:- | S:-
+release-notes-v1.6.0.md[SG4T]: F:v1.6.0 发行说明：全部工具页支持拖入文件并按处理场景限定格式 | R:- | A:- | S:-
+release-notes-v1.7.0.md[SG4T]: F:v1.7.0 发行说明：新增裁剪页，预览画面加双端点时间轴选起止时间 | R:- | A:- | S:-
+release-notes-v1.7.1.md[SG4T]: F:v1.7.1 发行说明：裁剪页对外发布与代码审查发现的修复批次 | R:- | A:- | S:-
+release-notes-v1.7.2.md[SG4T]: F:v1.7.2 发行说明：裁剪页、打开输出文件夹与更新机制加固 | R:- | A:- | S:-
+release-notes-v1.7.4.md[SG4T]: F:v1.7.4 发行说明：1.7.3 并入的修复与裁剪页 UI 改进累积版 | R:- | A:- | S:v1.7.3 未单独发布安装包，其变更全部并入本版本说明
+
+===E:/Git/WorkBuddy/日常/maruko-box/MarukoBox/===
+.gitignore[FR5T]: F:声明主工程版本控制忽略范围（构建产物、发布输出、打包产物、IDE 状态） | R:- | A:- | S:-
+App.xaml[FV4T]: F:应用级 XAML 资源声明，仅合并 WinUI 默认控件资源字典 | R:code:MarukoBox/App.xaml.cs | A:- | S:-
+App.xaml.cs[EG8M]: F:应用生命周期入口：主题预应用、三层全局异常兜底、崩溃日志轮转与 UI 线程封送 | R:code:MarukoBox/App.xaml,code:MarukoBox/AppServices.cs,code:MarukoBox/MainWindow.xaml.cs | A:App.Window / App.WindowHandle / App.RunOnUiThread(action) / App.LogCrash(ex, where) | S:后台线程直接触碰可视化树触发 0xc000027b native fast-fail，托管 try/catch 与 UnhandledException 均拦不住，跨线程更新绑定属性必须经 RunOnUiThread；RequestedTheme 只能在窗口内容加载前设置，运行中切换需重启生效
+AppServices.cs[FV7S]: F:轻量服务定位器，集中装配 GpuDetection/Ffmpeg/Config/Update 四个单例服务 | R:code:MarukoBox/Services/GpuDetectionService.cs,code:MarukoBox/Services/FfmpegService.cs,code:MarukoBox/Services/ConfigService.cs,code:MarukoBox/Services/UpdateService.cs | A:AppServices.Ffmpeg / .Config / .Update / .GpuDetection | S:刻意不引第三方 DI 容器保持零依赖；新增服务必须在此登记单例，勿在 ViewModel 里自行 new
+MainWindow.xaml[FV5S]: F:主窗口导航外壳声明：标题栏 + NavigationView 十个页面项 + 内容 Frame | R:code:MarukoBox/MainWindow.xaml.cs | A:- | S:NavigationViewItem 的 Tag 是页面路由键（Video/Trim/Extract/Audio/Mux/Image/Tools/Subtitle/Settings/About），与 MainWindow.xaml.cs 的路由 switch 一一对应，新增页面两处必须同步
+MainWindow.xaml.cs[EG7M]: F:主窗口：导航路由、窗口图标与最小尺寸、退出时会话快照合并保存 | R:code:MarukoBox/MainWindow.xaml,code:MarukoBox/Services/ConfigService.cs | A:MainWindow.SaveSessionIfEnabled()（由 App.OnLaunched 挂到 Window.Closed） | S:图标必须用 AppContext.BaseDirectory 绝对路径，开始菜单启动时 CWD 不等于 exe 目录会静默失效；会话快照为合并式保存：读旧快照只更新当前页块再写回，防视频/裁剪页互相覆盖
+MarukoBox.csproj[FV8M]: F:主工程配置：net10.0-windows10.0.26100、版本号、WinAppSDK 2.4 与 unpackaged 发布补丁 | R:code:Installer-Inno/build-installer.ps1,code:MarukoBox/app.manifest | A:- | S:版本号在此维护（Harness.csproj/marukobox.iss/Package.appxmanifest 同步）；unpackaged 补丁补拷 xbf/resources.pri/Assets 缺失即崩溃；PublishTrimmed 必须 False，反射序列化是裁剪高危
+Package.appxmanifest[FV5T]: F:MSIX 包身份、显示名与目标系统版本声明 | R:code:MarukoBox/MarukoBox.csproj,code:Installer-Inno/marukobox.iss | A:- | S:Version 是发布版本号四处同步点之一（csproj/iss/appxmanifest/Harness.csproj）
+app.manifest[FV4T]: F:应用清单：OS 兼容声明与 PerMonitorV2 DPI 感知 | R:code:MarukoBox/MarukoBox.csproj | A:- | S:supportedOS 声明是 unpackaged 应用自定义标题栏生效的必要条件
+
+===E:/Git/WorkBuddy/日常/maruko-box/MarukoBox/Converters/===
+Converters.cs[SV5M]: F:XAML 值转换器集合：布尔/可见性/用户级别/流类型色标/数值与时长格式化 | R:code:MarukoBox/Services/ConfigService.cs | A:- | S:x:Bind 同写 Converter 与 FallbackValue 会静默丢 Converter，用 ShortNumber 的绑定禁写 FallbackValue；UserLevelToVisibility 参数为最低级别名（Default/Expert/Developer）
+
+===E:/Git/WorkBuddy/日常/maruko-box/MarukoBox/Helpers/===
+FileDropHelper.cs[FV8M]: F:文件拖放与格式白名单统一封装，拖放与 FileOpenPicker 共用同一份白名单（Video/Audio/Subtitle/Image/Media） | R:code:MarukoBox/App.xaml.cs | A:FileDropHelper.CreatePicker(allowed) / Split(paths, allowed) / GetPathsAsync(e) / Highlight(border) / Restore(border) | S:除 FolderPicker 外严禁 FileTypeFilter.Add("*")，任何新的文件入口必须走本类白名单并经 Split 提示忽略数；Highlight 用 ConditionalWeakTable 暂存原边框，与 Restore 必须成对调用否则高亮写死
+OutputNaming.cs[FV6M]: F:输出文件命名规则引擎：10 种预设 + 统一构造入口，空片段自动丢弃不出现空洞 | R:code:MarukoBox/Helpers/OutputPathHelper.cs | A:OutputNaming.BuildOutputPath(rule, sourcePath, userDir, ctx) / Preview(rule) | S:配置存中文显示名，非法值 Normalize 回退「原名 + 时间」；构造结果与源文件同路径时强制插 _out 后缀，防止「原名」规则直接覆盖源文件
+OutputPathHelper.cs[FV4T]: F:输出目录解析：用户指定目录优先，为空则回退源文件所在目录 | R:- | A:OutputPathHelper.ResolveDir(sourceDir, userDir) | S:-
+PickerHelper.cs[FV4T]: F:FolderPicker 统一封装：HWND 初始化 + VideosLibrary 起点，返回所选目录路径或 null | R:code:MarukoBox/App.xaml.cs | A:PickerHelper.PickFolderAsync() | S:必须写 FileTypeFilter.Add("*")，WinUI 硬性要求，全仓唯一豁免点
+ShellHelper.cs[FV4T]: F:explorer.exe 定位封装：有产出文件则 /select 选中，否则打开输出目录并向 上回退首个存在的父目录 | R:- | A:ShellHelper.OpenOutputLocation(lastFile, outputDir, sourcePath) | S:-
+TrimTimeline.xaml[FV5S]: F:裁剪时间轴控件视觉声明：轨道/选区/两端遮罩/双端点握把/播放指针/跟随时间气泡 | R:code:MarukoBox/Helpers/TrimTimeline.xaml.cs | A:- | S:-
+TrimTimeline.xaml.cs[FV8M]: F:自绘双端点裁剪时间轴：Canvas 摆位、就近命中端点、拖动实时回调、松手提交 | R:code:MarukoBox/Helpers/TrimTimeline.xaml,code:MarukoBox/Pages/TrimPage.xaml.cs | A:属性 Duration/Start/End/Position；事件 Edited(拖动中持续)/Committed(松手一次) | S:不用两个 Slider 拼，因 Thumb 命中区小且无法表达选区语义；抽缩略图这类重刷新只允许挂 Committed，挂 Edited 逐帧抽图会拖垮 UI；端点最小间隔钳制 0.1s，命中半径 16px
+
+===E:/Git/WorkBuddy/日常/maruko-box/MarukoBox/Models/===
+AudioPreset.cs[FV4T]: F:音频转码参数预设模型：编码器/比特率/声道/采样率，0 值表示保持原始 | R:code:MarukoBox/Services/FfmpegService.cs | A:- | S:由 FfmpegService.BuildAudioArguments 转为 ffmpeg 参数；Codec=copy 时其余字段全部忽略
+EncodeItem.cs[FV5M]: F:批量编码队列的单个任务项：路径/状态文本/进度/完成与错误标志 | R:code:MarukoBox/Pages/AudioPage.xaml.cs,code:MarukoBox/ViewModels/AudioViewModel.cs | A:- | S:手写 INotifyPropertyChanged 而非 ObservableProperty，FileName 随 InputPath 联动通知
+EncodeProgress.cs[FV5T]: F:编码实时进度模型：百分比/速度/帧率/已处理与剩余时长/码率/状态 | R:code:MarukoBox/Services/FfmpegService.cs | A:- | S:用 C# partial property 语法的 [ObservableProperty]，满足 WinUI 3 / WinRT 的 AOT 与编组要求
+EncodeSettings.cs[FV8M]: F:一次编码任务的全部参数：编码器/GPU 码率控制/CPU x264x265 参数/分辨率/容器/音字幕处理 | R:code:MarukoBox/Models/QualityPresets.cs,code:MarukoBox/Models/SessionState.cs,code:MarukoBox/Services/FfmpegService.cs | A:- | S:AfterCompletion 仅存 session.json 不落 config.json，关机属一次性意图不长期记忆；SubtitleMode 只实现 copy/drop，burn 烧录未实现；Quality 默认 22 与质量档「高」一致
+EncoderOption.cs[FV4T]: F:编码器下拉选项（类型 + UI 显示名） | R:code:MarukoBox/Models/EncoderType.cs | A:- | S:-
+EncoderType.cs[FV7M]: F:视频编码器枚举与扩展：GPU 优先序、ffmpeg -c:v 名称映射、Auto 硬件解析 | R:code:MarukoBox/Models/GpuInfo.cs,code:MarukoBox/Services/FfmpegService.cs | A:EncoderTypeExtensions.ToFfmpegCodec() / Resolve(gpuInfo) | S:Auto 未解析时 ToFfmpegCodec 缺省 hevc_nvenc，必须先经 Resolve(gpuInfo) 再落参数
+FfmpegReleaseRow.cs[FV6T]: F:程序员级 ffmpeg 版本列表的 UI 行模型：tag/资产 URL/日期大小/兼容性 | R:code:MarukoBox/Services/UpdateService.cs,code:MarukoBox/ViewModels/SettingsViewModel.cs | A:- | S:IsCompatible=false 时安装按钮仍可点：程序员用户允许跳过驱动门槛强制安装
+FrameExtractOptions.cs[FV4T]: F:图片页抽帧参数：单张/间隔模式、时间点、输出格式与缩放 | R:code:MarukoBox/ViewModels/ImageViewModel.cs,code:MarukoBox/Services/FfmpegService.cs | A:- | S:-
+GpuInfo.cs[FV6M]: F:GPU 硬件与 ffmpeg 后端检测结果：显卡/驱动/NVENC API/各编码器可用性 | R:code:MarukoBox/Services/GpuDetectionService.cs,code:MarukoBox/Models/EncoderType.cs | A:GpuInfo.RecommendedEncoder | S:推荐优先序 NVENC-HEVC > AMF > QSV > NVENC-H264 > x264；HasCudaScale/Decode 决定能否全 GPU 链路
+MediaFileInfo.cs[FV4T]: F:工具页媒体信息结果：总时长 + 流列表 | R:code:MarukoBox/Models/MediaStreamInfo.cs | A:- | S:-
+MediaStreamInfo.cs[FV5T]: F:抽取页单条轨道模型与 StreamType 枚举：序号/类型/编码/语言/勾选 | R:code:MarukoBox/Converters/Converters.cs,code:MarukoBox/ViewModels/ExtractViewModel.cs | A:- | S:partial property 语法满足 AOT 与编组要求
+MuxInput.cs[FV5T]: F:封装页输入条目：路径 + 按扩展名推断的视频/音频/字幕类型 | R:code:MarukoBox/ViewModels/MuxViewModel.cs,code:MarukoBox/Converters/Converters.cs | A:- | S:InferKind 对未知扩展名回落 Video 而非报错
+OptionEntry.cs[FV4T]: F:通用下拉选项（值 + 显示名），视频页各 ComboBox 复用 | R:- | A:- | S:-
+QualityPresets.cs[FV8S]: F:普通级恒定质量四档（低30/中26/高22/非常高18）的映射与落地 | R:code:MarukoBox/Models/EncodeSettings.cs,code:Harness/Program.cs | A:QualityPresets.Apply(settings, preset) / ToValue(preset) | S:Apply 必须同时切 RateControl=cqp 与 CpuMode=crf，只写数值则 GPU/CPU 分支读不到，四档完全失效（B1 缺陷根因）；独立成静态类使 Harness 可做回归断言
+SessionState.cs[FV7M]: F:保持习惯会话快照：视频页参数全量 + 裁剪页工作参数 + 旧格式迁移 | R:code:MarukoBox/Services/ConfigService.cs,code:MarukoBox/MainWindow.xaml.cs | A:- | S:整体序列化 EncodeSettings，InputPath/OutputPath 除外；Legacy 嵌套类仅用于把 v1.4.0 扁平格式 session.json 迁到新格式，防升级清空用户习惯
+TrimRequest.cs[FV5T]: F:一次裁剪任务参数：起止时间/快速或精确模式/编码器/质量档 | R:code:MarukoBox/Services/FfmpegService.cs,code:MarukoBox/ViewModels/TrimViewModel.cs | A:- | S:Mode=Copy 走 -c copy 秒级无损但切点对齐关键帧，ReEncode 重新编码才精确到帧
+
+===E:/Git/WorkBuddy/日常/maruko-box/MarukoBox/Pages/===
+AboutPage.xaml[FV4T]: F:关于页视觉声明：简介/技术栈/版本号文本 | R:code:MarukoBox/Pages/AboutPage.xaml.cs | A:- | S:-
+AboutPage.xaml.cs[FV4T]: F:关于页后置：构造时从程序集读取版本号显示 | R:code:MarukoBox/Services/UpdateService.cs | A:- | S:版本必须取自程序集（GetAppVersionStatic），硬编码会与实际发布漂移（E1 修复）
+AudioPage.xaml[FV5T]: F:音频页视觉声明：编转码参数区、输出目录行、批量队列卡片 | R:code:MarukoBox/Pages/AudioPage.xaml.cs | A:- | S:声道/采样率等参数由 UserLevelToVisibility 按 Expert 级别控制可见
+AudioPage.xaml.cs[FV6T]: F:音频页后置：选择器与整卡拖放入队，与选择器共用白名单 | R:code:MarukoBox/Helpers/FileDropHelper.cs,code:MarukoBox/ViewModels/AudioViewModel.cs | A:- | S:音频来源允许视频容器（先抽音轨再转码），白名单用 Media 而非纯 Audio
+ExtractPage.xaml[FV4T]: F:抽取页视觉声明：源文件/输出目录卡片、轨道列表与抽取参数 | R:code:MarukoBox/Pages/ExtractPage.xaml.cs | A:- | S:-
+ExtractPage.xaml.cs[FV5T]: F:抽取页后置：Media 白名单选择器与源文件卡片拖放 | R:code:MarukoBox/Helpers/FileDropHelper.cs,code:MarukoBox/ViewModels/ExtractViewModel.cs | A:- | S:单文件场景：多拖取首个，其余受支持文件也计入忽略提示
+ImagePage.xaml[FV4T]: F:图片页视觉声明：视频抽帧与图片转码两功能区 | R:code:MarukoBox/Pages/ImagePage.xaml.cs | A:- | S:-
+ImagePage.xaml.cs[FV6T]: F:图片页后置：抽帧卡与转码卡各自独立的拖放与选择器 | R:code:MarukoBox/Helpers/FileDropHelper.cs,code:MarukoBox/ViewModels/ImageViewModel.cs | A:- | S:同页两块拖放区白名单不同：抽帧卡只收 Video，转码卡只收 Image，不可合并成一份
+MuxPage.xaml[FV4T]: F:封装页视觉声明：三类轨道添加按钮、轨道列表、容器与输出行 | R:code:MarukoBox/Pages/MuxPage.xaml.cs | A:- | S:-
+MuxPage.xaml.cs[FV6S]: F:封装页后置：三类轨道选择器入队与拖放按扩展名自动分流 | R:code:MarukoBox/Helpers/FileDropHelper.cs,code:MarukoBox/ViewModels/MuxViewModel.cs,code:MarukoBox/Models/MuxInput.cs | A:- | S:拖放分流按 Video/Audio/Subtitle 三份白名单各归各位，三类全不认才提示忽略；输出默认名取首个视频文件名，浏览目录会整体重设输出路径
+PlaceholderPage.xaml[FV4T]: F:未实现模块占位页视觉声明 | R:code:MarukoBox/Pages/PlaceholderPage.xaml.cs | A:- | S:-
+PlaceholderPage.xaml.cs[FV4T]: F:占位页后置：OnNavigatedTo 从导航参数读取标题 | R:code:MarukoBox/MainWindow.xaml.cs | A:- | S:-
+SettingsPage.xaml[FV6S]: F:设置页视觉声明：更新源/硬件能力/ffmpeg 路径/默认编码参数/主题/保持习惯/用户级别/输出目录 | R:code:MarukoBox/ViewModels/SettingsViewModel.cs | A:- | S:主题与用户级别改动需重启生效；ffmpeg 手动路径在内置存在时不生效，优先级为内置→手动→PATH
+SettingsPage.xaml.cs[FV4T]: F:设置页后置：仅 InitializeComponent，逻辑全在 SettingsViewModel | R:code:MarukoBox/ViewModels/SettingsViewModel.cs | A:- | S:-
+SubtitlePage.xaml[FV5T]: F:字幕页视觉声明：抽取/嵌入/转换三功能区 | R:code:MarukoBox/Pages/SubtitlePage.xaml.cs | A:- | S:-
+SubtitlePage.xaml.cs[FV6T]: F:字幕页后置：三块拖放区各自白名单与统一 PickFileAsync | R:code:MarukoBox/Helpers/FileDropHelper.cs,code:MarukoBox/ViewModels/SubtitleViewModel.cs | A:- | S:嵌入区拖放按文件类型分流：视频进嵌入视频位，字幕进嵌入字幕位
+ToolsPage.xaml[FV4T]: F:工具页视觉声明：媒体信息卡片与流列表 | R:code:MarukoBox/Pages/ToolsPage.xaml.cs | A:- | S:-
+ToolsPage.xaml.cs[FV4T]: F:工具页后置：Media 白名单选择器与单文件拖放 | R:code:MarukoBox/Helpers/FileDropHelper.cs,code:MarukoBox/ViewModels/ToolsViewModel.cs | A:- | S:-
+TrimPage.xaml[FV6S]: F:裁剪页视觉声明：预览区/时间轴/起止块插槽/播放控制/输出行 | R:code:MarukoBox/Pages/TrimPage.xaml.cs | A:- | S:画质 Slider 范围禁止在 XAML 声明（Minimum 先于 Maximum 抛 XamlParseException），由后置代码设置
+TrimPage.xaml.cs[FV8L]: F:裁剪页核心：预览播放器联动、时间轴事件翻译、空格键播放、响应式布局与另存为 | R:code:MarukoBox/Helpers/TrimTimeline.xaml.cs,code:MarukoBox/ViewModels/TrimViewModel.cs,code:MarukoBox/MainWindow.xaml.cs | A:- | S:_fromPlayer 标志防播放器回环 seek；缩略图只在松手后抽；空格键页面级拦截但排除输入框与按钮；Slider 范围必须 Maximum→Value→Minimum 顺序，反序抛异常整页打不开
+VideoPage.xaml[FV5T]: F:视频页视觉声明：批量队列、编码参数面板与实时进度三区 | R:code:MarukoBox/Pages/VideoPage.xaml.cs,code:MarukoBox/ViewModels/VideoViewModel.cs | A:- | S:-
+VideoPage.xaml.cs[FV6T]: F:视频页后置：Media 白名单入队、整左栏拖放与离页保存会话 | R:code:MarukoBox/Helpers/FileDropHelper.cs,code:MarukoBox/ViewModels/VideoViewModel.cs | A:- | S:OnNavigatedFrom 触发 SaveSessionIfEnabled，切走页面也保持习惯；拖放区覆盖整个左侧栏并显示全页模糊 overlay
+
+===E:/Git/WorkBuddy/日常/maruko-box/MarukoBox/Properties/PublishProfiles/===
+win-arm64.pubxml[XV4T]: F:ARM64 自包含发布配置：FileSystem 协议与发布目录布局 | R:code:MarukoBox/MarukoBox.csproj | A:- | S:-
+win-x64.pubxml[XV4T]: F:x64 自包含发布配置：SelfContained=true，输出 bin 配置 TFM RID publish | R:code:MarukoBox/MarukoBox.csproj | A:- | S:-
+win-x86.pubxml[XV4T]: F:x86 自包含发布配置：FileSystem 协议与发布目录布局 | R:code:MarukoBox/MarukoBox.csproj | A:- | S:-
+
+===E:/Git/WorkBuddy/日常/maruko-box/MarukoBox/Properties/===
+launchSettings.json[XV4T]: F:IDE 启动配置：MSIX 包身份与 unpackaged 双 profile | R:code:MarukoBox/MarukoBox.csproj | A:- | S:-
+
+===E:/Git/WorkBuddy/日常/maruko-box/MarukoBox/Services/===
+ConfigService.cs[FV8M]: F:配置与会话持久化：config.json/session.json、ffmpeg 路径解析链、内置 ffmpeg 更新自愈 | R:code:MarukoBox/Models/SessionState.cs,code:MarukoBox/Services/UpdateService.cs | A:IConfigService.Load/Save；ConfigService.LoadSession/SaveSession/ResolveFfmpegPath(configured) | S:ffmpeg 优先级内置→显式配置→PATH，PATH 查找纯托管不起子进程；Load 时自愈 ffmpeg.old 更新中断；session.json 旧扁平格式自动迁移不清空习惯
+FfmpegService.cs[FV9L]: F:ffmpeg 命令构造与执行中枢：编码/流探测/轨道抽取/音频转码/封装/字幕/抽帧/裁剪与进度解析 | R:code:MarukoBox/Models/EncodeSettings.cs,code:MarukoBox/Models/TrimRequest.cs,code:MarukoBox/Models/AudioPreset.cs | A:EncodeAsync/ProbeStreamsAsync/ExtractStreamsAsync/TranscodeAudioAsync/RemuxAsync/TrimAsync/GrabFrameAsync 等 IFfmpegService 全员 | S:裁剪参数铁律：-ss 前置于 -i、用 -t 不用 -to、禁 -avoid_negative_ts（实测使 -t 失效多产 1.6s）；进度 out_time_ms 实为微秒单位
+GpuDetectionService.cs[FV7M]: F:GPU 检测：并发探测 ffmpeg 各编码器可用性、nvidia-smi 显卡信息、NVENC API 版本推断 | R:code:MarukoBox/Models/GpuInfo.cs,code:MarukoBox/Services/ConfigService.cs | A:GpuDetectionService.DetectAsync(ffmpegPath)；静态 Invalidate() 清缓存 | S:结果按 ffmpeg 路径进程内缓存，内置 ffmpeg 更新后必须 Invalidate()，否则读到旧能力
+UpdateService.cs[FV8L]: F:应用与内置 ffmpeg 更新：GitHub/Gitee 双源、CN 镜像、驱动兼容门槛、下载安装 | R:code:MarukoBox/Services/ConfigService.cs,code:MarukoBox/ViewModels/SettingsViewModel.cs | A:GetLatestAppReleaseAsync/GetAllFfmpegReleasesAsync/ShouldOfferFfmpegUpdate/CompareVersions | S:下载后 SHA256 比对官方值，不过不执行；ffmpeg 8.x 需驱动≥610，专家级可强装；替换内置走 ffmpeg→ffmpeg.old→移入，中断由 ConfigService 自愈
+
+===E:/Git/WorkBuddy/日常/maruko-box/MarukoBox/ViewModels/===
+AudioViewModel.cs[FV6M]: F:音频页 VM：批量转码队列与编码器/比特率/声道/采样率选项 | R:code:MarukoBox/Services/FfmpegService.cs,code:MarukoBox/Models/AudioPreset.cs | A:AddFilesCommand / RemoveItemCommand | S:源允许视频容器（Media 白名单）；转码出错时 finally 不覆盖错误文本（v1.7.1 修复）
+ExtractViewModel.cs[FV5T]: F:抽取页 VM：轨道分析、勾选与批量无损抽取 | R:code:MarukoBox/Services/FfmpegService.cs,code:MarukoBox/Models/MediaStreamInfo.cs | A:- | S:-
+ImageViewModel.cs[FV5T]: F:图片页 VM：抽帧参数与图片转码两区状态 | R:code:MarukoBox/Models/FrameExtractOptions.cs,code:MarukoBox/Services/FfmpegService.cs | A:- | S:-
+MuxViewModel.cs[FV5T]: F:封装页 VM：三轨输入集合、容器选择与 Remux 执行 | R:code:MarukoBox/Models/MuxInput.cs,code:MarukoBox/Services/FfmpegService.cs | A:AddVideoCommand / AddAudioCommand / AddSubtitleCommand | S:-
+SettingsViewModel.cs[FV7L]: F:设置页 VM：全部配置项绑定、GPU 检测、应用与 ffmpeg 更新流程、程序员级版本列表 | R:code:MarukoBox/Services/UpdateService.cs,code:MarukoBox/Services/GpuDetectionService.cs,code:MarukoBox/Services/ConfigService.cs | A:- | S:主题与用户级别写配置后需重启生效；CN 更新源任一端点不可用自动回退 GitHub
+SubtitleViewModel.cs[FV6M]: F:字幕页 VM：字幕流抽取、嵌入视频、字幕格式转换三流程 | R:code:MarukoBox/Services/FfmpegService.cs | A:- | S:-
+ToolsViewModel.cs[FV4T]: F:工具页 VM：媒体信息查看（时长 + 流列表） | R:code:MarukoBox/Services/FfmpegService.cs,code:MarukoBox/Models/MediaFileInfo.cs | A:- | S:-
+TrimViewModel.cs[FV8L]: F:裁剪页 VM：视频载入、时间轴状态、端点缩略图抽帧、快速/精确裁剪执行 | R:code:MarukoBox/Services/FfmpegService.cs,code:MarukoBox/Models/TrimRequest.cs | A:LoadAsync(path) / RefreshThumbnailsAsync() | S:缩略图临时文件名用随机 GUID，Image 控件按 URI 缓存，同名覆盖不刷新；预览失败降级为仅时间轴 + 缩略图，不阻塞裁剪
+VideoViewModel.cs[FV8L]: F:视频页 VM：批量编码队列、界面参数到 EncodeSettings 的映射、完成后动作与会话捕获 | R:code:MarukoBox/Models/EncodeSettings.cs,code:MarukoBox/Models/QualityPresets.cs,code:MarukoBox/Services/FfmpegService.cs | A:AddFiles(paths) / CaptureSession() | S:质量四档必须经 QualityPresets.Apply 落地（同时切模式）；AfterCompletion 在队列全部结束后消费（关机/休眠/退出）
