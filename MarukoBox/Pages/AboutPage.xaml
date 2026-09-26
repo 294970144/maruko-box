@@ -7,7 +7,8 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d" NavigationCacheMode="Required">
 
-    <StackPanel Spacing="12" MaxWidth="560" Margin="48">
+    <!-- 同 SettingsPage：只给 MaxWidth 时 Stretch 会靠右落位，需显式左对齐/居中 -->
+    <StackPanel Spacing="12" MaxWidth="560" Margin="48" HorizontalAlignment="Left">
         <TextBlock Text="MarukoBox 2026" Style="{StaticResource TitleTextBlockStyle}" />
         <TextBlock
             Text="基于 Windows App SDK + WinUI 3 的视频压制工具，调用 ffmpeg 实现 GPU 硬件编码（NVENC / AMF / QSV）。"

@@ -479,7 +479,7 @@ public partial class VideoViewModel : ObservableObject
     [RelayCommand]
     private async Task DetectAsync()
     {
-        var ffmpegPath = _config.Load().FfmpegPath;
+        var ffmpegPath = _config.Load().ResolvedFfmpegPath;
         if (string.IsNullOrWhiteSpace(ffmpegPath))
         {
             StatusText = "未设置 ffmpeg 路径，请在设置页配置";
@@ -618,6 +618,19 @@ public partial class VideoViewModel : ObservableObject
         {
             return;
         }
+
+        // 【M5 修复】输出目录校验：OutputDir 来自配置/会话快照，可能指向已失效的位置
+        // （拔掉的移动硬盘、被删掉的目录），此前只有「队列非空 / 未在编码」两个前置判断，
+        // 无效目录会被直接透传给 ffmpeg，整批静默失败（且因 H2 拿不到原因）。
+        // 回退到源文件目录并同步到 UI，让用户看到实际生效的输出位置。
+        var dir = OutputPathHelper.EnsureOutputDir(OutputDir, Queue.FirstOrDefault()?.InputPath);
+        if (dir is null)
+        {
+            StatusText = "输出目录无效且无法回退到源文件目录，请重新选择输出文件夹";
+            return;
+        }
+
+        OutputDir = dir;
 
         SyncToSettings();
         _cts = new CancellationTokenSource();

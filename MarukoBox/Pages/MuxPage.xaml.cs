@@ -61,6 +61,19 @@ public sealed partial class MuxPage : Page
         _ => FileDropHelper.Video
     };
 
+    /// <summary>清空轨道（P0-D 危险确认）：不可撤销，需二次确认。</summary>
+    private async void ClearInputs_Click(object sender, RoutedEventArgs e)
+    {
+        var count = ViewModel.Inputs.Count;
+        var message = count > 0
+            ? $"将移除全部 {count} 条轨道输入，此操作不可撤销。"
+            : "当前没有输入文件。";
+        if (await UiConfirm.ShowAsync("清空轨道", message, "清空"))
+        {
+            ViewModel.ClearInputsCommand.Execute(null);
+        }
+    }
+
     private async void BrowseOutput_Click(object sender, RoutedEventArgs e)
     {
         var folder = await PickerHelper.PickFolderAsync();

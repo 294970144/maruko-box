@@ -30,7 +30,7 @@ public partial class ToolsViewModel : ObservableObject
     [ObservableProperty]
     public partial string StatusText { get; set; } = "请选择媒体文件查看信息";
 
-    private string FfmpegPath => _config.Load().FfmpegPath;
+    private string FfmpegPath => _config.Load().ResolvedFfmpegPath;
 
     [RelayCommand]
     private async Task ProbeAsync()

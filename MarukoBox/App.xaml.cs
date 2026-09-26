@@ -33,6 +33,13 @@ public partial class App : Application
     public static Microsoft.UI.Dispatching.DispatcherQueue DispatcherQueue { get; private set; } = null!;
 
     /// <summary>
+    /// 启动自动检查发现的待处理新版本 tag（null = 无）。
+    /// 由 <see cref="RunStartupUpdateCheckAsync"/> 写入；设置页打开时读取并展示 InfoBar，
+    /// 用户手动「检查更新」后清除。
+    /// </summary>
+    public static string? PendingUpdateTag { get; set; }
+
+    /// <summary>
     /// The native window handle (HWND). Use for file pickers,
     /// <c>DataTransferManager</c>, and any WinRT interop that requires
     /// <c>InitializeWithWindow</c>.
@@ -272,6 +279,49 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// 启动时自动检查更新（仅一次，静默）：延后 15 秒错开启动高峰（GPU 检测 / 会话恢复），
+    /// 按 config.AutoCheckUpdates 开关与当前更新源查询最新 Release；
+    /// 发现新版 → 点亮「设置」导航项徽标并记录 <see cref="PendingUpdateTag"/> 供设置页提示。
+    /// 不自动下载——安装包的下载与执行必须经用户手动确认（与 M1/S1 的安全立场一致）。
+    /// 任何失败完全静默（仅日志），绝不打扰用户。
+    /// </summary>
+    private static async Task RunStartupUpdateCheckAsync()
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(15));
+
+            var config = AppServices.Config.Load();
+            if (!config.AutoCheckUpdates)
+            {
+                LogInfo("启动检查更新：已关闭（AutoCheckUpdates=false），跳过");
+                return;
+            }
+
+            var source = string.Equals(config.UpdateSource?.Trim(), "cn", StringComparison.OrdinalIgnoreCase)
+                ? MarukoBox.Services.UpdateSource.CN
+                : MarukoBox.Services.UpdateSource.GitHub;
+            var latest = await AppServices.Update.GetLatestAppReleaseAsync(source);
+
+            var current = AppServices.Update.GetAppVersion();
+            if (MarukoBox.Services.UpdateService.CompareVersions(current, latest.Version) >= 0)
+            {
+                LogInfo($"启动检查更新：已是最新版本（{current}）");
+                return;
+            }
+
+            PendingUpdateTag = latest.Tag;
+            LogInfo($"启动检查更新：发现新版本 {latest.Tag}，已点亮设置导航徽标");
+            RunOnUiThread(() => (Window as MainWindow)?.SetUpdateAvailable(true));
+        }
+        catch (Exception ex)
+        {
+            // 自动检查失败（网络不可用 / 源超时等常态）完全静默，仅留日志
+            LogInfo($"启动更新检查未完成：{ex.GetType().Name} {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Invoked when the application is launched.
     /// </summary>
     /// <param name="args">Details about the launch request and process.</param>
@@ -285,5 +335,9 @@ public partial class App : Application
         Window.Closed += (_, _) => MainWindow.SaveSessionIfEnabled();
 
         Window.Activate();
+
+        // 自动检查更新：仅启动时一次、后台静默（开关与说明见 RunStartupUpdateCheckAsync）。
+        // fire-and-forget：内部已全量 try/catch，绝不影响启动路径。
+        _ = RunStartupUpdateCheckAsync();
     }
 }

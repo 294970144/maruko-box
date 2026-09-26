@@ -62,7 +62,7 @@
                         </Grid>
                     </StackPanel>
 
-                    <Button Content="分析轨道" Style="{StaticResource AccentButtonStyle}"
+                    <Button Content="分析轨道"
                             Command="{x:Bind ViewModel.AnalyzeCommand, Mode=OneWay}"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InvertBool}}"
                             HorizontalAlignment="Stretch" />

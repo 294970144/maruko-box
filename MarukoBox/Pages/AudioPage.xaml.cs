@@ -41,6 +41,19 @@ public sealed partial class AudioPage : Page
         }
     }
 
+    /// <summary>清空队列（P0-D 危险确认）：不可撤销，需二次确认。</summary>
+    private async void ClearQueue_Click(object sender, RoutedEventArgs e)
+    {
+        var count = ViewModel.Queue.Count;
+        var message = count > 0
+            ? $"将移除队列中的全部 {count} 个文件，未开始的任务不会转码，此操作不可撤销。"
+            : "队列为空。";
+        if (await UiConfirm.ShowAsync("清空队列", message, "清空"))
+        {
+            ViewModel.ClearQueueCommand.Execute(null);
+        }
+    }
+
     // ---------- 拖放：整张「音频队列」卡片都是放置区 ----------
 
     private void QueueCard_DragEnter(object sender, DragEventArgs e)

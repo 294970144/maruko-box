@@ -32,45 +32,54 @@
                     BorderThickness="1" CornerRadius="8" Padding="16">
                 <StackPanel Spacing="12">
                     <TextBlock Text="转码参数" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                    <Grid ColumnSpacing="12" RowSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Spacing="6">
-                            <TextBlock Text="编码器" Opacity="0.8" />
-                            <ComboBox ItemsSource="{x:Bind ViewModel.CodecOptions, Mode=OneWay}"
-                                      DisplayMemberPath="Name" SelectedValuePath="Value"
-                                      SelectedValue="{x:Bind ViewModel.SelectedCodec, Mode=TwoWay}"
-                                      HorizontalAlignment="Stretch" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="6">
-                            <TextBlock Text="比特率" Opacity="0.8" />
-                            <ComboBox ItemsSource="{x:Bind ViewModel.BitrateOptions, Mode=OneWay}"
-                                      DisplayMemberPath="Name" SelectedValuePath="Value"
-                                      SelectedValue="{x:Bind ViewModel.SelectedBitrate, Mode=TwoWay}"
-                                      HorizontalAlignment="Stretch" />
-                        </StackPanel>
-                        <!-- 声道/采样率（高手及以上） -->
-                        <StackPanel Grid.Column="2" Spacing="6"
-                                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
-                            <TextBlock Text="声道" Opacity="0.8" />
-                            <ComboBox ItemsSource="{x:Bind ViewModel.ChannelOptions, Mode=OneWay}"
-                                      DisplayMemberPath="Name" SelectedValuePath="Value"
-                                      SelectedValue="{x:Bind ViewModel.SelectedChannels, Mode=TwoWay}"
-                                      HorizontalAlignment="Stretch" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="3" Spacing="6"
-                                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
-                            <TextBlock Text="采样率" Opacity="0.8" />
-                            <ComboBox ItemsSource="{x:Bind ViewModel.SampleRateOptions, Mode=OneWay}"
-                                      DisplayMemberPath="Name" SelectedValuePath="Value"
-                                      SelectedValue="{x:Bind ViewModel.SelectedSampleRate, Mode=TwoWay}"
-                                      HorizontalAlignment="Stretch" />
-                        </StackPanel>
-                    </Grid>
+
+                    <!-- ── 编码器选择 ── -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="编码器选择" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.8" />
+                        <ComboBox ItemsSource="{x:Bind ViewModel.CodecOptions, Mode=OneWay}"
+                                  DisplayMemberPath="Name" SelectedValuePath="Value"
+                                  SelectedValue="{x:Bind ViewModel.SelectedCodec, Mode=TwoWay}"
+                                  HorizontalAlignment="Left" MinWidth="240" />
+                    </StackPanel>
+
+                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                    <!-- ── 音频参数 ── -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="音频参数" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.8" />
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="6">
+                                <TextBlock Text="比特率" Opacity="0.8" />
+                                <ComboBox ItemsSource="{x:Bind ViewModel.BitrateOptions, Mode=OneWay}"
+                                          DisplayMemberPath="Name" SelectedValuePath="Value"
+                                          SelectedValue="{x:Bind ViewModel.SelectedBitrate, Mode=TwoWay}"
+                                          HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                            <!-- 声道/采样率（高手及以上） -->
+                            <StackPanel Grid.Column="1" Spacing="6"
+                                        Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
+                                <TextBlock Text="声道" Opacity="0.8" />
+                                <ComboBox ItemsSource="{x:Bind ViewModel.ChannelOptions, Mode=OneWay}"
+                                          DisplayMemberPath="Name" SelectedValuePath="Value"
+                                          SelectedValue="{x:Bind ViewModel.SelectedChannels, Mode=TwoWay}"
+                                          HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Spacing="6"
+                                        Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
+                                <TextBlock Text="采样率" Opacity="0.8" />
+                                <ComboBox ItemsSource="{x:Bind ViewModel.SampleRateOptions, Mode=OneWay}"
+                                          DisplayMemberPath="Name" SelectedValuePath="Value"
+                                          SelectedValue="{x:Bind ViewModel.SelectedSampleRate, Mode=TwoWay}"
+                                          HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
                     <TextBlock Text="{x:Bind ViewModel.TargetSummary, Mode=OneWay}"
                                FontSize="12" Opacity="0.7" />
                 </StackPanel>
@@ -117,7 +126,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="音频队列" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <Button Grid.Column="1" Content="添加文件" Click="AddFiles_Click" />
-                        <Button Grid.Column="2" Content="清空" Command="{x:Bind ViewModel.ClearQueueCommand, Mode=OneWay}" />
+                        <Button Grid.Column="2" Content="清空" Click="ClearQueue_Click" />
                     </Grid>
 
                     <ListView ItemsSource="{x:Bind ViewModel.Queue, Mode=OneWay}" MaxHeight="360"

@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>MarukoBox.Harness</AssemblyName>
     <!-- 与主程序版本一致，使软件版本冒烟显示真实值（而非默认 1.0.0） -->
-    <Version>1.8.0</Version>
+    <Version>1.10.3</Version>
     <!-- 【MARUKO_HARNESS】GpuInfo 等模型里的 WinUI 专属成员以此符号排除（见 GpuInfo.cs） -->
     <DefineConstants>$(DefineConstants);MARUKO_HARNESS</DefineConstants>
   </PropertyGroup>

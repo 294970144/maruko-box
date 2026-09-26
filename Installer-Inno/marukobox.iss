@@ -14,7 +14,7 @@
 #endif
 
 #define MyAppName "MarukoBox 2026"
-#define MyAppVersion "1.8.0"
+#define MyAppVersion "1.10.3"
 #define MyAppPublisher "MarukoBox"
 #define MyAppURL "https://github.com/294970144/maruko-box"
 #define MyAppExeName "MarukoBox.exe"

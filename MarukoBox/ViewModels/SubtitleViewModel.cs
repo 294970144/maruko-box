@@ -67,7 +67,7 @@ public partial class SubtitleViewModel : ObservableObject
     [ObservableProperty]
     public partial EncodeProgress Progress { get; set; } = new();
 
-    private string FfmpegPath => _config.Load().FfmpegPath;
+    private string FfmpegPath => _config.Load().ResolvedFfmpegPath;
 
     public SubtitleViewModel()
     {
@@ -139,7 +139,14 @@ public partial class SubtitleViewModel : ObservableObject
             return;
         }
 
-        var outDir = OutputPathHelper.ResolveDir(Path.GetDirectoryName(ExtractVideo) ?? ".", OutputDir);
+        // 【M5 修复】ResolveDir 只做"留空则用源目录"，**不校验存在性**；
+        // 改为校验后回退：配置指向已失效的盘时也能落到源文件目录，而不是整批静默失败。
+        var outDir = OutputPathHelper.EnsureOutputDir(OutputDir, ExtractVideo);
+        if (outDir is null)
+        {
+            StatusText = "输出目录无效且无法回退到源文件目录，请重新选择输出文件夹";
+            return;
+        }
 
         IsBusy = true;
         _cts = new CancellationTokenSource();
@@ -184,7 +191,15 @@ public partial class SubtitleViewModel : ObservableObject
             return;
         }
 
-        var outVideo = OutputNaming.BuildOutputPath(NamingRule, EmbedVideo, OutputDir,
+        // 【M5 修复】输出目录校验（同上）
+        var outDir = OutputPathHelper.EnsureOutputDir(OutputDir, EmbedVideo);
+        if (outDir is null)
+        {
+            StatusText = "输出目录无效且无法回退到源文件目录，请重新选择输出文件夹";
+            return;
+        }
+
+        var outVideo = OutputNaming.BuildOutputPath(NamingRule, EmbedVideo, outDir,
             new OutputNamingContext(EmbedVideo, "withsub", string.Empty, string.Empty, ".mkv"));
 
         IsBusy = true;
@@ -233,7 +248,15 @@ public partial class SubtitleViewModel : ObservableObject
             "vtt" => ".vtt",
             _ => ".ass"
         };
-        var outSub = OutputNaming.BuildOutputPath(NamingRule, ConvertInput, OutputDir,
+        // 【M5 修复】输出目录校验（同上）
+        var outDir = OutputPathHelper.EnsureOutputDir(OutputDir, ConvertInput);
+        if (outDir is null)
+        {
+            StatusText = "输出目录无效且无法回退到源文件目录，请重新选择输出文件夹";
+            return;
+        }
+
+        var outSub = OutputNaming.BuildOutputPath(NamingRule, ConvertInput, outDir,
             new OutputNamingContext(ConvertInput, "conv", string.Empty, string.Empty, ext));
 
         IsBusy = true;

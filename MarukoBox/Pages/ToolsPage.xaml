@@ -46,7 +46,7 @@
                         </Grid>
                     </StackPanel>
 
-                    <Button Content="查看媒体信息" Style="{StaticResource AccentButtonStyle}"
+                    <Button Content="查看媒体信息"
                             Command="{x:Bind ViewModel.ProbeCommand, Mode=OneWay}"
                             IsEnabled="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource InvertBool}}"
                             HorizontalAlignment="Stretch" />

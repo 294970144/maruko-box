@@ -78,7 +78,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="轨道列表" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <Button Grid.Column="1" Content="清空" Command="{x:Bind ViewModel.ClearInputsCommand, Mode=OneWay}" />
+                        <Button Grid.Column="1" Content="清空" Click="ClearInputs_Click" />
                     </Grid>
 
                     <ListView ItemsSource="{x:Bind ViewModel.Inputs, Mode=OneWay}" MaxHeight="360"

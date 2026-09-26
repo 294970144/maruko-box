@@ -94,6 +94,19 @@ public sealed partial class VideoPage : Page
         }
     }
 
+    /// <summary>清空队列（P0-D 危险确认）：不可撤销，需二次确认。</summary>
+    private async void ClearQueue_Click(object sender, RoutedEventArgs e)
+    {
+        var count = ViewModel.Queue.Count;
+        var message = count > 0
+            ? $"将移除队列中的全部 {count} 个文件，未开始的任务不会转码，此操作不可撤销。"
+            : "队列为空。";
+        if (await UiConfirm.ShowAsync("清空队列", message, "清空"))
+        {
+            ViewModel.ClearQueueCommand.Execute(null);
+        }
+    }
+
     /// <summary>离开视频页时把编码参数并入 session.json，确保切走也不丢失（配合「保持习惯」）。</summary>
     protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {

@@ -86,8 +86,22 @@ public static class UserLevels
 /// </summary>
 public class AppConfig
 {
-    /// <summary>ffmpeg.exe 路径。为空时由 <see cref="ConfigService.ResolveFfmpegPath"/> 探测。</summary>
+    /// <summary>
+    /// ffmpeg.exe 路径 —— **用户配置的原始值**（可为空，为空表示交给自动解析）。
+    /// 只有这一个字段会落盘；解析结果见 <see cref="ResolvedFfmpegPath"/>。
+    /// </summary>
     public string FfmpegPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 由 <see cref="FfmpegPath"/> 解析出的**实际生效**路径（内置优先 → 配置值 → PATH）。
+    /// 仅存在于内存，**不持久化**：
+    /// 【M2 修复】此前 <c>Load()</c> 把解析结果直接写回 <c>config.FfmpegPath</c>，
+    /// 于是任何「Load → 改一个字段 → Save」的循环都会把解析结果落盘——
+    /// 内置 ffmpeg 存在时它恒等于内置路径，用户在设置页手填的自定义 ffmpeg 路径
+    /// 会被静默覆盖，移走内置版本后原配置已丢失。
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ResolvedFfmpegPath { get; set; } = string.Empty;
 
     /// <summary>默认视频编码器：Auto / NvencHevc / NvencH264 / AmfHevc / QsvHevc / X264 / X265。</summary>
     public string DefaultEncoder { get; set; } = "Auto";
@@ -122,6 +136,21 @@ public class AppConfig
     /// 控制「检查更新」查询哪个站点；即时生效，无需重启。
     /// </summary>
     public string UpdateSource { get; set; } = "github";
+
+    /// <summary>
+    /// 自动检查更新：启动时静默检查一次是否有新版本（仅提示，不自动下载）。
+    /// 发现新版时在「设置」导航项点亮徽标；检查失败完全静默。设置页可开关。
+    /// </summary>
+    public bool AutoCheckUpdates { get; set; } = true;
+
+    /// <summary>
+    /// 左侧导航窗格的展开宽度（px，Expanded 态）。拖拽分隔条调整；即改即存。
+    /// </summary>
+    /// <remarks>
+    /// 与「保持习惯」开关无关（v1.9.0 Master 指定）：导航栏布局偏好始终记忆，
+    /// 存 config.json 而非 session.json——布局属于窗口外观，不是工作参数。
+    /// </remarks>
+    public double NavPaneExpandedWidth { get; set; } = 320;
 }
 
 /// <inheritdoc cref="IConfigService"/>
@@ -191,7 +220,10 @@ public sealed class ConfigService : IConfigService
         // 自动纠偏：内置优先。配置路径失效、指向旧开发路径或内置可用时，
         // 统一重解析出实际生效路径，全应用所有页面无需各自判断。
         RecoverBundledBackup();
-        config.FfmpegPath = ResolveFfmpegPath(config.FfmpegPath);
+
+        // 【M2 修复】解析结果写到 **不持久化** 的 ResolvedFfmpegPath，
+        // 不再覆盖 config.FfmpegPath（否则会被随后的 Save 落盘，销毁用户的手动配置）。
+        config.ResolvedFfmpegPath = ResolveFfmpegPath(config.FfmpegPath);
         return config;
     }
 

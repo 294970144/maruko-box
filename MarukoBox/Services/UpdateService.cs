@@ -10,7 +10,16 @@ using MarukoBox.Models;
 namespace MarukoBox.Services;
 
 /// <summary>软件自身（MarukoBox）在 GitHub 上的最新 Release 信息。</summary>
-public record AppReleaseInfo(string Tag, string Version, string DownloadUrl);
+/// <param name="SizeBytes">安装包资产字节数；GitHub 取自资产 size 字段，CN 源经 HEAD 探测
+/// Content-Length 获得（Gitee API 实测不返回资产大小），探测失败记 0（调用方按未知处理）。</param>
+public record AppReleaseInfo(string Tag, string Version, string DownloadUrl, long SizeBytes = 0);
+
+/// <summary>
+/// 下载进度快照（已下载字节数 / 总字节数）。
+/// BytesTotal ≤ 0 表示服务器未返回 Content-Length（罕见，如 chunked 编码），
+/// 此时调用方应退回「不定态进度条 + 仅显示已下载 MB」。
+/// </summary>
+public sealed record DownloadProgress(long BytesDone, long BytesTotal);
 
 /// <summary>
 /// 更新源。同时决定「软件自身更新」与「内置 ffmpeg 依赖更新」去哪里取：
@@ -96,7 +105,7 @@ public interface IUpdateService
 
     /// <summary>下载并安装新版 ffmpeg 到应用目录的 ffmpeg\ 下（整目录替换，写入 VERSION 标记）。</summary>
     Task DownloadAndInstallAsync(string downloadUrl, string versionTag,
-        IProgress<double>? progress = null, CancellationToken ct = default);
+        IProgress<DownloadProgress>? progress = null, CancellationToken ct = default);
 
     /// <summary>
     /// 【N8】最近一次下载安装是否因来源未提供 .sha256 而跳过校验。
@@ -106,7 +115,7 @@ public interface IUpdateService
 
     /// <summary>下载软件安装包到临时目录并返回完整路径（不自动运行，由调用方启动安装器）。</summary>
     Task<string> DownloadAppInstallerAsync(string downloadUrl, string version,
-        IProgress<double>? progress = null, CancellationToken ct = default);
+        IProgress<DownloadProgress>? progress = null, CancellationToken ct = default);
 }
 
 /// <inheritdoc cref="IUpdateService"/>
@@ -223,9 +232,20 @@ public sealed partial class UpdateService : IUpdateService
             }
         }
 
-        return best is null
-            ? new FfmpegRecommendation(false, BlockReason: firstBlock ?? "无可用的 ffmpeg 版本")
-            : new FfmpegRecommendation(true, best.Tag, best.AssetUrl, null, best.AssetSizeBytes);
+        if (best is null)
+        {
+            return new FfmpegRecommendation(false, BlockReason: firstBlock ?? "无可用的 ffmpeg 版本");
+        }
+
+        // 镜像源（CN）的目录索引没有文件大小字段（AssetSizeBytes 记 0）→
+        // 只对最终推荐的这一个版本做 1 次 HEAD 探测补齐，避免全列表 15 次请求拖慢检查。
+        var recommendedSize = best.AssetSizeBytes;
+        if (recommendedSize <= 0)
+        {
+            recommendedSize = await ProbeContentLengthAsync(best.AssetUrl, ct).ConfigureAwait(false);
+        }
+
+        return new FfmpegRecommendation(true, best.Tag, best.AssetUrl, null, recommendedSize);
     }
 
     /// <summary>
@@ -492,6 +512,7 @@ public sealed partial class UpdateService : IUpdateService
         var version = NormalizeTag(rawTag);
 
         string? url = null;
+        long assetSize = 0;
         if (doc.RootElement.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
         {
             foreach (var asset in assets.EnumerateArray())
@@ -503,6 +524,9 @@ public sealed partial class UpdateService : IUpdateService
                     && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                 {
                     url = asset.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
+                    // GitHub 资产 JSON 自带精确 size；Gitee API 实测只有 name + url
+                    assetSize = asset.TryGetProperty("size", out var s) && s.ValueKind == JsonValueKind.Number
+                        ? s.GetInt64() : 0L;
                     break;
                 }
             }
@@ -517,7 +541,43 @@ public sealed partial class UpdateService : IUpdateService
             throw new InvalidOperationException($"Release {rawTag} 未附带安装包资产");
         }
 
-        return new AppReleaseInfo(rawTag, version, url);
+        // CN 源（Gitee）拿不到资产大小 → HEAD 请求跟随重定向读 Content-Length 补齐；
+        // GitHub 源已有精确值，无需再探测。探测失败记 0（UI 按「大小未知」回退）。
+        if (assetSize <= 0)
+        {
+            assetSize = await ProbeContentLengthAsync(url, ct).ConfigureAwait(false);
+        }
+
+        return new AppReleaseInfo(rawTag, version, url, assetSize);
+    }
+
+    /// <summary>
+    /// HEAD 请求（自动跟随重定向）探测资源的精确字节数。
+    /// 用于不返回资产大小的源（Gitee API、兰州镜像目录索引）——实测两者对
+    /// HEAD + 重定向均返回准确的 Content-Length。失败（网络/404/无该头）返回 0。
+    /// </summary>
+    private async Task<long> ProbeContentLengthAsync(string url, CancellationToken ct)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Head, url);
+            request.Headers.UserAgent.ParseAdd($"MarukoBox/{GetAppVersionStatic()}");
+            using var response = await _metaHttp
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return 0;
+            }
+
+            return response.Content.Headers.ContentLength ?? 0;
+        }
+        catch (Exception ex)
+        {
+            // 大小探测失败不阻断更新流程，只留痕迹
+            App.LogInfo($"探测资源大小失败 {url}：{ex.GetType().Name}");
+            return 0;
+        }
     }
 
     /// <inheritdoc/>
@@ -660,7 +720,7 @@ public sealed partial class UpdateService : IUpdateService
 
     /// <inheritdoc/>
     public async Task DownloadAndInstallAsync(string downloadUrl, string versionTag,
-        IProgress<double>? progress = null, CancellationToken ct = default)
+        IProgress<DownloadProgress>? progress = null, CancellationToken ct = default)
     {
         // 【N6 修复】专家级版本列表的多行「安装」按钮可各自独立触发，两个安装并发会在
         // BundledDir 换名→换入的替换序列里交错（A 把目录移走后，B 对已不存在的目录再做
@@ -679,9 +739,16 @@ public sealed partial class UpdateService : IUpdateService
     }
 
     private async Task InstallCoreAsync(string downloadUrl, string versionTag,
-        IProgress<double>? progress = null, CancellationToken ct = default)
+        IProgress<DownloadProgress>? progress = null, CancellationToken ct = default)
     {
-        var tempZip = Path.Combine(Path.GetTempPath(), $"MarukoBox_ffmpeg_{Guid.NewGuid():N}.zip");
+        // 【H6 修复】压缩包落点从 %TEMP% 挪到 %LOCALAPPDATA%\MarukoBox\Updates。
+        // 与安装包（:188-191 的 UpdatesDirectory）同一条威胁模型：%TEMP% 对同用户下的
+        // 任何低完整性进程都可写，而 VerifyDownloadAsync 通过 → ExtractToDirectory 之间
+        // 存在 TOCTOU 窗口，本地木马可替换 zip，内容随后被解压并 Directory.Move 进
+        // {app}\ffmpeg\。LOCALAPPDATA 下本应用自建目录默认 ACL 仅当前用户可写。
+        var updatesDir = UpdatesDirectory;
+        Directory.CreateDirectory(updatesDir);
+        var tempZip = Path.Combine(updatesDir, $"MarukoBox_ffmpeg_{Guid.NewGuid():N}.zip");
 
         // 解压目录必须与应用目录同卷：Directory.Move 只支持同卷原子 rename，
         // 跨卷（如 Temp 在 C:、应用装在 D:/E:）会抛 IOException，导致替换失败甚至旧版丢失。
@@ -756,7 +823,8 @@ public sealed partial class UpdateService : IUpdateService
                 versionTag,
                 new UTF8Encoding(false), ct).ConfigureAwait(false);
 
-            progress?.Report(100);
+            // 完成态：done=total（即 100%）；UI 若此前处于不定态也会随之收尾
+            progress?.Report(new DownloadProgress(1, 1));
         }
         finally
         {
@@ -767,7 +835,7 @@ public sealed partial class UpdateService : IUpdateService
 
     /// <inheritdoc/>
     public async Task<string> DownloadAppInstallerAsync(string downloadUrl, string version,
-        IProgress<double>? progress = null, CancellationToken ct = default)
+        IProgress<DownloadProgress>? progress = null, CancellationToken ct = default)
     {
         // v1.4.1 安全加固（S2）：version 直接来自 GitHub 返回的 tag_name，
         // 旧实现只剥掉 v 前缀就拼进文件名，tag 若为 "..\..\Startup\evil"
@@ -841,9 +909,13 @@ public sealed partial class UpdateService : IUpdateService
         }
     }
 
-    /// <summary>流式下载文件到目标路径（带进度与取消支持）。</summary>
+    /// <summary>
+    /// 流式下载文件到目标路径（带进度与取消支持）。
+    /// 进度按「已下载 / 总字节」上报：服务器返回 Content-Length 时调用方可显示
+    /// 精确百分比与 MB 计数；未返回时 BytesTotal ≤ 0，调用方退回不定态展示。
+    /// </summary>
     private async Task DownloadFileAsync(string url, string destPath,
-        IProgress<double>? progress, CancellationToken ct)
+        IProgress<DownloadProgress>? progress, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.UserAgent.ParseAdd($"MarukoBox/{GetAppVersionStatic()}");
@@ -863,10 +935,8 @@ public sealed partial class UpdateService : IUpdateService
         {
             await local.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
             written += read;
-            if (total > 0)
-            {
-                progress?.Report(written * 100.0 / total);
-            }
+            // total ≤ 0 也上报：让 UI 至少能显示「已下载 x.x MB」
+            progress?.Report(new DownloadProgress(written, total));
         }
     }
 

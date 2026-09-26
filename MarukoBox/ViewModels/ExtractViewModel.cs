@@ -59,12 +59,20 @@ public partial class ExtractViewModel : ObservableObject
     public partial int TotalCount { get; set; }
 
     /// <summary>解析出的 ffmpeg 路径（按需从配置读取）。</summary>
-    private string FfmpegPath => _config.Load().FfmpegPath;
+    private string FfmpegPath => _config.Load().ResolvedFfmpegPath;
 
     /// <summary>分析源文件轨道。</summary>
     [RelayCommand]
     private async Task AnalyzeAsync()
     {
+        // 【H4 修复】重入保护：其余 7 个 ViewModel 入口都有 `if (IsBusy) return;`，
+        // 只有本文件两处入口没有。二次点击会让 _cts 被新实例覆盖，
+        // 前一个 ffmpeg 进程的取消回调再也收不到信号 → 孤儿进程 + 两个任务并发写同一输出目录。
+        if (IsBusy)
+        {
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(SourcePath) || !File.Exists(SourcePath))
         {
             StatusText = "源文件不存在，请重新选择";
@@ -104,6 +112,12 @@ public partial class ExtractViewModel : ObservableObject
     [RelayCommand]
     private async Task ExtractAsync()
     {
+        // 【H4 修复】同上：入口重入保护（详见 AnalyzeAsync 的注释）。
+        if (IsBusy)
+        {
+            return;
+        }
+
         var selected = Streams.Where(s => s.IsSelected).ToList();
         if (selected.Count == 0)
         {

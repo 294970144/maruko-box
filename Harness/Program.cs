@@ -100,15 +100,34 @@ Console.WriteLine($"  B1' -gpu 限定: {(gpuFails == 0 ? "PASS" : $"FAIL ({gpuFa
 Console.Out.Flush();
 Console.Out.Flush();
 
-// 与主程序一致的路径解析链：内置 ffmpeg 优先，其次 PATH
-var ffmpeg = ConfigService.ResolveFfmpegPath();
+// 与主程序一致的路径解析链：内置 ffmpeg 优先，其次 PATH。
+//
+// 【保真度】Harness 从自己的 bin 目录启动，那里没有 ffmpeg\ 子目录，
+// 于是 BundledFfmpegPath 不存在 → 回落到 PATH → 实测抓到的是 **winget 的
+// ffmpeg-N-124279**（内置版本标记为空），而不是产品内置的 jellyfin-7.1.1-5。
+// 两者选项集不同，C2 这类"参数名/取值是否被接受"的问题可能在错误的目标上被验证通过。
+// 因此：① 支持 MB_FFMPEG 环境变量显式指定；② 未用内置版时打印醒目告警。
+var ffmpeg = Environment.GetEnvironmentVariable("MB_FFMPEG");
+if (string.IsNullOrWhiteSpace(ffmpeg))
+{
+    ffmpeg = ConfigService.ResolveFfmpegPath();
+}
+
 if (string.IsNullOrEmpty(ffmpeg))
 {
-    Console.WriteLine("未找到 ffmpeg（无内置、PATH 中也没有）。请放置内置 ffmpeg 或将其加入 PATH。");
+    Console.WriteLine("未找到 ffmpeg（无内置、PATH 中也没有）。请放置内置 ffmpeg 或将其加入 PATH，或用 MB_FFMPEG 指定。");
     Environment.Exit(1);
 }
+
 Console.WriteLine($"ffmpeg: {ffmpeg}");
 Console.WriteLine($"内置版本标记: {ConfigService.GetBundledVersion()}");
+if (!string.Equals(ffmpeg, ConfigService.BundledFfmpegPath, StringComparison.OrdinalIgnoreCase))
+{
+    Console.WriteLine("⚠ 注意：当前用的不是产品内置 ffmpeg（Harness 自身目录无内置副本）。");
+    Console.WriteLine("  编码器/参数断言请指定 MB_FFMPEG 指向产品内置的 jellyfin ffmpeg，");
+    Console.WriteLine("  否则验证的是另一个构建的选项集，结论可能不适用于产品。");
+}
+Console.Out.Flush();
 
 // 【M8 修复】测试素材路径不再硬编码到某个人的目录：
 // 优先读环境变量 MB_TEST_SRC / MB_TEST_OUT，缺省才回落到原来的路径。
@@ -156,7 +175,130 @@ catch (Exception ex)
     Console.WriteLine(ex.StackTrace);
 }
 
-return presetFails == 0 && ok ? 0 : 1;
+// =====================================================================
+// 【三个 Critical 的回归断言：真跑 ffmpeg，而不是只比对字符串形状】
+//
+// C1 / C2 / C3 共享同一根因：编码器参数构建**从未与真实 ffmpeg 后端端到端验证过**。
+// 上面那些断言校验的是 BuildArguments 返回的字符串**长得对不对**，
+// 而 ffmpeg 是否接受这个字符串没人管——所以 `-keyint`（x264 命令行的参数名，
+// ffmpeg 侧叫 -g）与 NVENC 私有的 `-rc vbr` / `-preset p4` 能一路潜伏到线上。
+//
+// 这里对每种编码器用真实 ffmpeg 编 2 帧到 null 输出，判据是**基线对照**，不是关键字猜测：
+//
+//   1. 先跑「基线」：只用 -c:v {codec}，不带 hwaccel / 输出格式 / 滤镜 / 我们拼的任何参数。
+//   2. 再跑「全参」：BuildCoreArguments 的真实产物。
+//   3. 判定：
+//        全参 exit 0              → PASS
+//        全参失败 + 基线成功      → **FAIL**（基线证明硬件可用，失败只可能是我们拼的参数组合错）
+//        全参失败 + 基线也失败    → SKIP（本机硬件/驱动不可用，换机器可能就过）
+//
+// 【为什么不用关键字白名单】第一版用 4 个关键字（Unrecognized option / Option not found /
+// Error setting option / Error applying encoder options）判断"参数被拒"，结果把
+// `hevc_amf + -hwaccel_output_format cuda` 的 `Function not implemented` /
+// `Error reinitializing filters` 记成了 SKIP——在唯一能测 AMF 的机器上给了**假绿**。
+// 关键字永远追不上 ffmpeg 的报错措辞；"基线能过、全参过不了"才是可靠的判别式。
+// =====================================================================
+Console.WriteLine("=== 编码器端到端断言（真跑 ffmpeg · 每种编 2 帧到 null）===");
+Console.Out.Flush();
+
+var encoderFails = 0;
+var buildCore = typeof(FfmpegService).GetMethod(
+    "BuildCoreArguments",
+    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+if (buildCore is null)
+{
+    Console.WriteLine("  FAIL 反射不到 BuildCoreArguments，端到端断言无法执行");
+    encoderFails++;
+}
+else
+{
+    foreach (var enc in new[]
+             {
+                 EncoderType.NvencHevc, EncoderType.AmfHevc, EncoderType.QsvHevc,
+                 EncoderType.X264, EncoderType.X265
+             })
+    {
+        var codec = enc.ToFfmpegCodec();
+
+        // ---- 基线：只指定编码器，不带任何我们拼的参数（hwaccel / 输出格式 / 滤镜 / 码率…）----
+        var (baselineCode, _) = RunFfmpeg(ffmpeg,
+            $"-hide_banner -loglevel error -f lavfi -i testsrc=s=320x240:d=1:r=25 " +
+            $"-c:v {codec} -frames:v 2 -f null -");
+
+        // ---- 全参：BuildCoreArguments 的真实产物 ----
+        var s = new EncodeSettings { InputPath = src, OutputPath = outp, Encoder = enc };
+        var core = (string)buildCore.Invoke(null, new object[] { s, enc, gpu })!;
+        var (code, err) = RunFfmpeg(ffmpeg, core.TrimEnd() + " -frames:v 2 -f null -");
+
+        if (code == 0)
+        {
+            Console.WriteLine($"  PASS {enc}");
+        }
+        else if (baselineCode != 0)
+        {
+            // 基线也过不了 → 本机没有可用硬件/驱动，不是我们参数的问题
+            Console.WriteLine($"  SKIP {enc}：本机不可用（基线退出码 {baselineCode}、全参 {code}）");
+        }
+        else
+        {
+            // 基线能编、全参编不了 → 只可能是我们拼的参数组合有问题（C1/C2/C3 连带形态）
+            encoderFails++;
+            Console.WriteLine($"  FAIL {enc}：基线可编（exit 0）但全参失败（exit {code}）→ {FirstErrorLine(err)}");
+        }
+
+        Console.Out.Flush();
+    }
+}
+
+// 跑一次 ffmpeg，返回 (退出码, stderr)
+static (int Code, string Err) RunFfmpeg(string ffmpegPath, string arguments)
+{
+    var psi = new ProcessStartInfo(ffmpegPath, arguments)
+    {
+        UseShellExecute = false,
+        RedirectStandardError = true,
+        RedirectStandardOutput = true,
+        CreateNoWindow = true,
+        StandardErrorEncoding = System.Text.Encoding.UTF8,
+        StandardOutputEncoding = System.Text.Encoding.UTF8
+    };
+
+    using var p = Process.Start(psi)!;
+    var err = p.StandardError.ReadToEnd();
+    p.StandardOutput.ReadToEnd();   // 抽干 stdout，避免缓冲区满导致进程挂住
+    p.WaitForExit();
+    return (p.ExitCode, err);
+}
+
+Console.WriteLine($"  编码器端到端: {(encoderFails == 0 ? "PASS" : $"FAIL ({encoderFails} 项)")}");
+
+return presetFails == 0 && ok && encoderFails == 0 ? 0 : 1;
+
+// 取第一条"看起来是错误原因"的行，便于一眼定位。
+// 只用于**展示**：判定由上面的「基线对照」负责，不再依赖关键字白名单。
+static string FirstErrorLine(string stderr)
+{
+    foreach (var raw in stderr.Split('\n'))
+    {
+        var line = raw.Trim();
+        if (line.Length == 0)
+        {
+            continue;
+        }
+
+        if (line.Contains("Error", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("failed", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("Invalid", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("Unrecognized", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("not implemented", StringComparison.OrdinalIgnoreCase))
+        {
+            return line.Length > 160 ? line[..160] + "…" : line;
+        }
+    }
+
+    return stderr.Trim().Length == 0 ? "(stderr 为空)" : stderr.Trim()[..Math.Min(160, stderr.Trim().Length)];
+}
 
 // ---------- 更新链路冒烟：直接执行 UpdateService 产品代码 ----------
 static async Task<int> UpdateSmokeAsync()
@@ -312,7 +454,11 @@ static async Task<int> UpdateSmokeAsync()
     {
         Console.WriteLine("\n--- 下载并安装（按推荐版本，整目录替换） ---");
         Console.Out.Flush();
-        var progress = new Progress<double>(p => Console.Write($"\r下载进度: {p:F0}%   "));
+        var progress = new Progress<MarukoBox.Services.DownloadProgress>(p =>
+        {
+            var pct = p.BytesTotal > 0 ? $" {p.BytesDone * 100.0 / p.BytesTotal:F0}%" : string.Empty;
+            Console.Write($"\r下载进度: {p.BytesDone / 1024d / 1024d:F1} MB{pct}   ");
+        });
         try
         {
             await update.DownloadAndInstallAsync(recommendedUrl, recommendedTag, progress);

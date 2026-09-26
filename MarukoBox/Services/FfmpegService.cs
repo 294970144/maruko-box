@@ -168,15 +168,39 @@ public class FfmpegService : IFfmpegService
     /// 构建视频编码的核心参数（输入 / 滤镜 / 编码器 / 音轨），不含末尾的
     /// <c>-y "输出"</c>。供单遍编码与 2-Pass 编码（需拆成两遍）复用。
     /// </summary>
+    /// <summary>
+    /// 是否 NVIDIA NVENC 编码器。
+    /// </summary>
+    /// <remarks>
+    /// CUDA 系的三个东西（`-gpu`、<c>-hwaccel_output_format cuda</c>、<c>scale_cuda</c>）
+    /// **只有 NVENC 能用**——它们是 NVIDIA 的私有能力，喂给 AMF / QSV 会让整次编码
+    /// 在初始化/滤镜阶段失败（实测 -40 Function not implemented）。
+    /// 这里收敛成唯一判据，避免"改了 4 处漏了 3 处"（审查报告指出的系统性形状）。
+    /// </remarks>
+    private static bool IsNvenc(EncoderType encoder) =>
+        encoder is EncoderType.NvencHevc or EncoderType.NvencH264;
+
     private static string BuildCoreArguments(EncodeSettings settings, EncoderType resolvedEncoder, GpuInfo gpuInfo)
     {
         var sb = new StringBuilder();
         var isGpu = resolvedEncoder.IsGpuEncoder();
 
         // ---------- 输入（GPU 路径启用 CUDA 硬件解码） ----------
+        // 【C3 连带修复】`-hwaccel cuda` 与 `-hwaccel_output_format cuda` 必须拆开：
+        // 前者（解码侧）对 AMF / QSV 无害——实测 hevc_amf + -hwaccel cuda → exit 0 正常编码；
+        // 后者会把解码输出**留在 CUDA 显存里**，AMF / QSV 拿不到这种帧，实测
+        //   hevc_amf + -hwaccel cuda                            → exit 0   ✅
+        //   hevc_amf + -hwaccel cuda -hwaccel_output_format cuda → -40 Function not implemented ❌
+        // 于是 C2 刚修好的 AMF/QSV 又被这一句打死（Intel iGPU + N 独显机器上显式选 QSV/AMF 触发）。
+        // 门槛写法与下面 `-gpu` 一致：只有 NVENC 才要 CUDA 帧。
         if (isGpu && gpuInfo.HasCudaDecode)
         {
-            sb.Append("-hwaccel cuda -hwaccel_output_format cuda ");
+            sb.Append("-hwaccel cuda ");
+
+            if (IsNvenc(resolvedEncoder))
+            {
+                sb.Append("-hwaccel_output_format cuda ");
+            }
         }
 
         sb.Append($"-i \"{settings.InputPath}\" ");
@@ -213,7 +237,7 @@ public class FfmpegService : IFfmpegService
 
         if (isGpu)
         {
-            sb.Append(BuildGpuEncoderArgs(settings));
+            sb.Append(BuildGpuEncoderArgs(settings, resolvedEncoder));
         }
         else
         {
@@ -225,8 +249,7 @@ public class FfmpegService : IFfmpegService
         // 报 "Option not found" 让整次编码失败，而设置页的设备号输入框对所有用户可见，
         // 非 N 卡用户一旦填了 >0 就每次必挂。
         // QSV 的多设备选择另有机制且各 ffmpeg 版本参数名不一致，未实测前宁可不加。
-        if (settings.GpuDevice > 0 &&
-            resolvedEncoder is EncoderType.NvencHevc or EncoderType.NvencH264)
+        if (settings.GpuDevice > 0 && IsNvenc(resolvedEncoder))
         {
             sb.Append($"-gpu {settings.GpuDevice} ");
         }
@@ -262,7 +285,10 @@ public class FfmpegService : IFfmpegService
         // 【N9 修复】scale_cuda 只接受 GPU 帧：若解码侧未走 hwaccel（HasCudaDecode=false），
         // 系统内存帧喂给 scale_cuda 会直接报错。检测组合"有一无一"虽属边角，
         // 但条件写全不花任何成本，且让 scale_cuda 与 hwaccel 解码能力显式耦合。
-        if (resolved.IsGpuEncoder() && gpuInfo.HasCudaDecode && gpuInfo.HasCudaScale)
+        // 【C3 连带修复】再补 NVENC 门槛：scale_cuda 产出的是 CUDA 帧，
+        // 喂给 AMF / QSV 同样报 -40 Function not implemented（实测），
+        // 与上面 -hwaccel_output_format cuda 是同一个问题的两处出口。
+        if (IsNvenc(resolved) && gpuInfo.HasCudaDecode && gpuInfo.HasCudaScale)
         {
             return $"scale_cuda={w}:{h}:interp_algo=4";
         }
@@ -272,18 +298,41 @@ public class FfmpegService : IFfmpegService
     }
 
     /// <summary>
-    /// 构建 GPU 编码器（NVENC / AMF / QSV）参数。
+    /// 构建 GPU 编码器参数：按 NVENC / AMF / QSV **分别**构建。
     /// </summary>
-    private static string BuildGpuEncoderArgs(EncodeSettings s)
+    /// <remarks>
+    /// 【C2 修复】此前三种 GPU 编码器共用一套参数，而 `-rc vbr|cbr|constqp`、
+    /// `-preset p{N}`、`-tune`、`-spatial-aq`、`-aq-strength`、`-rc-lookahead`、
+    /// `-forced-idr` 全是 <c>hevc_nvenc</c>/<c>h264_nvenc</c> 的**私有 AVOption**：
+    ///   * hevc_amf 的 `-rc` 取值集合不含 `vbr`（只有 cqp / cbr / vbr_peak）
+    ///   * hevc_qsv 的 `-preset` 取值是 veryfast…veryslow，不是 p1–p7
+    /// 结果 AMD / Intel 用户在视频页选 AMF / QSV 必然失败（参数解析阶段即中止）。
+    /// 实测（jellyfin-ffmpeg 7.1.1-5）：
+    ///   hevc_amf  -rc vbr            → Error setting option rc to value vbr
+    ///   hevc_qsv  -preset p4         → Error setting option preset to value p4
+    ///   hevc_nvenc（同组参数）        → 解析通过
+    /// 分流写法照本文件 `BuildTrimArguments` 已有的正确做法（AMF/QSV 走 -quality）。
+    /// </remarks>
+    private static string BuildGpuEncoderArgs(EncodeSettings s, EncoderType encoder)
     {
-        var sb = new StringBuilder();
-
-        // ---- 码率控制 ----
         // VBV 上限（maxrate）必须 ≥ 目标码率，否则会把平均码率也压到 maxrate 以下，
         // 表现为「设置高码率却不生效」。这里按目标码率自动抬高 maxrate / bufsize 下限。
         var maxRate = Math.Max(s.MaxBitrateKbps, s.BitrateKbps);
         var bufSize = Math.Max(s.BufferSizeKbps, maxRate * 2);
         var vbv = $"-maxrate {maxRate}k -bufsize {bufSize}k ";
+
+        return encoder switch
+        {
+            EncoderType.NvencHevc or EncoderType.NvencH264 => BuildNvencEncoderArgs(s, vbv),
+            EncoderType.AmfHevc => BuildAmfEncoderArgs(s, vbv),
+            _ => BuildQsvEncoderArgs(s, vbv)
+        };
+    }
+
+    /// <summary>NVENC 专用参数（原有写法，实测解析通过）。</summary>
+    private static string BuildNvencEncoderArgs(EncodeSettings s, string vbv)
+    {
+        var sb = new StringBuilder();
 
         switch (s.RateControl)
         {
@@ -312,7 +361,6 @@ public class FfmpegService : IFfmpegService
                 break;
         }
 
-        // ---- 质量调优 ----
         sb.Append($"-preset p{s.GpuPreset} ");
         sb.Append($"-tune {s.GpuTune} ");
         sb.Append($"-profile:v {s.Profile} ");
@@ -330,6 +378,67 @@ public class FfmpegService : IFfmpegService
         {
             sb.Append("-forced-idr 1 ");
         }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// AMF（AMD）专用参数：只发 AMF 存在的选项（-rc / -quality / -usage / -qp_i / -qp_p）。
+    /// 不发送 -tune / -profile / -spatial-aq / -rc-lookahead / -forced-idr（AMF 无这些）。
+    /// </summary>
+    private static string BuildAmfEncoderArgs(EncodeSettings s, string vbv)
+    {
+        var sb = new StringBuilder();
+
+        switch (s.RateControl)
+        {
+            case "cqp":
+                // AMF 的 CQP 用 -qp_i / -qp_p（无 NVENC 的 -qp）
+                sb.Append($"-rc cqp -qp_i {s.Quality} -qp_p {s.Quality} ");
+                break;
+
+            case "cbr":
+                sb.Append($"-rc cbr -b:v {s.BitrateKbps}k ");
+                sb.Append(vbv);
+                break;
+
+            default: // vbr / 2pass：AMF 只有 vbr_peak（峰值约束 VBR）
+                sb.Append($"-rc vbr_peak -b:v {s.BitrateKbps}k ");
+                sb.Append(vbv);
+                break;
+        }
+
+        // 把 NVENC 的 p1..p7 映射到 AMF 三档质量预设（p 越小越快）
+        sb.Append($"-quality {(s.GpuPreset <= 2 ? "speed" : s.GpuPreset >= 6 ? "quality" : "balanced")} ");
+        sb.Append("-usage transcoding ");
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// QSV（Intel）专用参数：只发 -b:v / VBV / -preset。
+    /// 本 ffmpeg 构建的 hevc_qsv 未暴露 CQP 类选项，故 cqp 模式回落到码率控制
+    /// （宁可多给码率，也不要发出编码器不认的参数令整次编码中止）。
+    /// </summary>
+    private static string BuildQsvEncoderArgs(EncodeSettings s, string vbv)
+    {
+        var sb = new StringBuilder();
+
+        sb.Append($"-b:v {s.BitrateKbps}k ");
+        sb.Append(vbv);
+
+        // NVENC 的 p1..p7 → QSV 的 veryfast…veryslow（实测取值 7=veryfast … 1=veryslow）
+        var preset = s.GpuPreset switch
+        {
+            <= 1 => "veryfast",
+            2 => "faster",
+            3 => "fast",
+            4 => "medium",
+            5 => "slow",
+            6 => "slower",
+            _ => "veryslow"
+        };
+        sb.Append($"-preset {preset} ");
 
         return sb.ToString();
     }
@@ -380,7 +489,14 @@ public class FfmpegService : IFfmpegService
         sb.Append($"-aq-mode {s.AqMode} ");
         sb.Append($"-aq-strength {s.CpuAqStrength.ToString(CultureInfo.InvariantCulture)} ");
         sb.Append($"-psy-rd {s.PsyRd} ");
-        sb.Append($"-keyint {s.KeyInt} -min-keyint {s.MinKeyInt} ");
+
+        // 【C1 修复】-keyint / -min-keyint 是 **x264 命令行**的参数名，不是 ffmpeg 的
+        // AVOption；ffmpeg 侧叫 -g / -keyint_min。原写法令该分支无条件拼出非法参数，
+        // x264 与 x265 都会在参数解析阶段直接失败（一个字节都不输出）。
+        // 实测（jellyfin-ffmpeg 7.1.1-5）：
+        //   -keyint 250 -min-keyint 25 → Unrecognized option 'keyint'. Option not found
+        //   -g 250 -keyint_min 25      → 正常编码
+        sb.Append($"-g {s.KeyInt} -keyint_min {s.MinKeyInt} ");
 
         return sb.ToString();
     }
@@ -536,6 +652,21 @@ public class FfmpegService : IFfmpegService
         // 「已编码帧数 ÷ 已耗时」兜底，避免进度面板 FPS 一直显示 0。
         var wallClock = Stopwatch.StartNew();
 
+        // 【H2 修复】保留 ffmpeg stderr 的尾部若干行。
+        // 此前这个回调只从 stderr 里取 Duration，行内容**从不落盘**——而 ffmpeg 的一切
+        // 失败原因（参数不认、编码器初始化失败、文件不可写……）**只写在 stderr**。
+        // 于是 8 处 UI 让用户"详见日志"，日志里却只有"ffmpeg 退出码 1"，
+        // 这正是 C1/C2/C3 三个 Critical 能长期潜伏的直接原因。
+        // 尾部有界（40 行），避免长任务把内存吃满；读取在进程退出后，加锁以防回调仍在跑。
+        var stderrTail = new Queue<string>();
+        var stderrTailLock = new object();
+        const int stderrTailMax = 40;
+
+        // 【M4】stderr 是突发的（一次可能连续几十行），逐行 Report 会把 UI 线程打满。
+        // 结构化进度由 stdout 那条链路负责，这里节流到约 10 次/秒。
+        long lastStderrReportTicks = 0;
+        const int stderrReportIntervalMs = 100;
+
         // ---------- stderr: 日志 + 总时长 ----------
         // 此回调运行在线程池线程，任何未捕获异常都应就地吞掉，避免终止进程。
         process.ErrorDataReceived += (_, e) =>
@@ -558,7 +689,23 @@ public class FfmpegService : IFfmpegService
                     }
                 }
 
-                progress.Report(current);
+                // H2：留存尾部，供失败时落盘与展示
+                lock (stderrTailLock)
+                {
+                    stderrTail.Enqueue(line);
+                    while (stderrTail.Count > stderrTailMax)
+                    {
+                        stderrTail.Dequeue();
+                    }
+                }
+
+                // M4：节流上报
+                var nowTicks = Environment.TickCount64;
+                if (nowTicks - lastStderrReportTicks >= stderrReportIntervalMs)
+                {
+                    lastStderrReportTicks = nowTicks;
+                    progress.Report(current);
+                }
             }
             catch (Exception ex)
             {
@@ -640,8 +787,23 @@ public class FfmpegService : IFfmpegService
 
         if (process.ExitCode != 0)
         {
+            // 【H2 修复】把 ffmpeg 的真实报错落盘，并把它放进 UI 可见的 ErrorMessage。
+            // 以前只有"退出码 N"——对用户和开发者都等于没有信息。
+            string[] tail;
+            lock (stderrTailLock)
+            {
+                tail = stderrTail.ToArray();
+            }
+
+            if (tail.Length > 0)
+            {
+                App.LogInfo(
+                    $"ffmpeg 失败（退出码 {process.ExitCode}），stderr 尾部：{Environment.NewLine}"
+                    + RedactPaths(string.Join(Environment.NewLine, tail)));
+            }
+
             current.HasError = true;
-            current.ErrorMessage = $"ffmpeg 退出码 {process.ExitCode}";
+            current.ErrorMessage = BuildFfmpegErrorMessage(process.ExitCode, tail);
             current.StatusMessage = "编码失败";
             progress.Report(current);
             return false;
@@ -651,6 +813,64 @@ public class FfmpegService : IFfmpegService
         current.StatusMessage = "已完成";
         progress.Report(current);
         return true;
+    }
+
+    /// <summary>
+    /// 【H2】从 ffmpeg 的 stderr 尾部挑出最有信息量的一行，作为用户可见的失败原因，
+    /// 取代原先只有「ffmpeg 退出码 N」的文案。
+    /// </summary>
+    /// <remarks>
+    /// ffmpeg 的真实原因通常出现在最后几行（如 <c>Unrecognized option 'keyint'</c>、
+    /// <c>Error initializing output stream</c>），因此从尾部往前找第一行含错误关键字的行；
+    /// 找不到就退回最后一行。路径仍走 <see cref="RedactPaths"/> 脱敏后再展示。
+    /// </remarks>
+    private static string BuildFfmpegErrorMessage(int exitCode, string[] stderrTail)
+    {
+        const int maxLen = 160;
+
+        if (stderrTail.Length == 0)
+        {
+            return $"ffmpeg 退出码 {exitCode}";
+        }
+
+        string? best = null;
+        for (var i = stderrTail.Length - 1; i >= 0; i--)
+        {
+            var line = stderrTail[i].Trim();
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var isErrorLine =
+                line.Contains("Unrecognized option", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("Error", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("Invalid", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("No such", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("not found", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("failed", StringComparison.OrdinalIgnoreCase);
+
+            if (isErrorLine)
+            {
+                best = line;
+                break;
+            }
+
+            best ??= line;   // 兜底：保留最后一行非空
+        }
+
+        if (string.IsNullOrEmpty(best))
+        {
+            return $"ffmpeg 退出码 {exitCode}";
+        }
+
+        var redacted = RedactPaths(best);
+        if (redacted.Length > maxLen)
+        {
+            redacted = redacted[..maxLen] + "…";
+        }
+
+        return $"ffmpeg 退出码 {exitCode}：{redacted}";
     }
 
     /// <inheritdoc/>
@@ -877,27 +1097,37 @@ public class FfmpegService : IFfmpegService
 
         var sb = new StringBuilder();
 
+        // 【M6 修复】时间/间隔一律按 InvariantCulture 格式化：小数点为逗号的区域设置
+        // （de / fr / ru / pt / it / es / tr 等）下 `0.###` 会产出 `1,5`，
+        // ffmpeg 解析失败，整条抽帧路径不可用。同文件 :381 等处本就显式指定了文化，
+        // 这几处是遗漏，不是风格选择。
         if (options.Mode == FrameMode.Single)
         {
-            var outFile = Path.Combine(outputDir, $"frame_{options.TimeSeconds:0.###}s.{ext}");
-            sb.Append($"-ss {options.TimeSeconds:0.###} -i \"{inputVideo}\" ");
+            var timeText = options.TimeSeconds.ToString("0.###", CultureInfo.InvariantCulture);
+            var outFile = Path.Combine(outputDir, $"frame_{timeText}s.{ext}");
+            sb.Append($"-ss {timeText} -i \"{inputVideo}\" ");
             if (!string.IsNullOrEmpty(scale))
             {
                 sb.Append($"-vf {scale} ");
             }
 
-            sb.Append($"-frames:v 1 -q:v 2 \"{outFile}\"");
+            // 【M7 修复】单帧分支此前没有 -y：同名文件已存在时 ffmpeg 会停在
+            // "File '…' already exists. Overwrite? [y/N]"，第二次抽同一时间点必失败
+            // （调参数重试是用户的常见动作）。序列帧分支走 image2 muxer 按模式逐文件覆盖
+            // 不受影响，但两条分支统一带 -y 更安全。
+            sb.Append($"-frames:v 1 -q:v 2 -y \"{outFile}\"");
         }
         else
         {
             var interval = options.IntervalSeconds > 0 ? options.IntervalSeconds : 1;
+            var intervalText = interval.ToString("0.###", CultureInfo.InvariantCulture);
             var outPattern = Path.Combine(outputDir, $"frame_%04d.{ext}");
             sb.Append($"-i \"{inputVideo}\" ");
             // 序列帧用 fps 滤镜；若需缩放则合并到同一条滤镜链（ffmpeg 只接受最后一个 -vf）。
             sb.Append(string.IsNullOrEmpty(scale)
-                ? $"-vf fps=1/{interval} "
-                : $"-vf fps=1/{interval},{scale} ");
-            sb.Append($"\"{outPattern}\"");
+                ? $"-vf fps=1/{intervalText} "
+                : $"-vf fps=1/{intervalText},{scale} ");
+            sb.Append($"-y \"{outPattern}\"");
         }
 
         return await RunFfmpegCoreAsync(
@@ -1302,12 +1532,14 @@ public class FfmpegService : IFfmpegService
         // -ss 放在 -i 之前：先按索引粗定位、再由解码器精修。
         // 重编码模式下 ffmpeg 会从最近关键帧开始解码并丢弃起点之前的帧，因此起点是帧级精确的；
         // 拷贝模式下无法在 GOP 中间切断，只能从最近关键帧开始（表现为片段可能略微提前）。
-        sb.Append($"-ss {request.Start.TotalSeconds:0.###} ");
+        // 【M6 修复】同上：时间参数必须按 InvariantCulture 输出，否则逗号小数点区域
+        // 会生成 `-ss 1,5`，ffmpeg 直接解析失败。
+        sb.Append($"-ss {request.Start.TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture)} ");
         sb.Append($"-i \"{request.InputPath}\" ");
 
         // 用 -t（时长）而不是 -to（绝对时刻）：-ss 前置后输出时间轴从 0 重新起算，
         // 此时 -to 会被当作"从起点起的偏移"，写出来容易相差一个 start。
-        sb.Append($"-t {duration.TotalSeconds:0.###} ");
+        sb.Append($"-t {duration.TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture)} ");
 
         if (request.Mode == TrimMode.Copy)
         {
@@ -1394,7 +1626,8 @@ public class FfmpegService : IFfmpegService
 
         // -2 表示按偶数对齐（部分编码器要求宽高为偶数）；-1 在奇分辨率下会直接报错。
         var scale = maxWidth > 0 ? $"-vf scale={maxWidth}:-2 " : string.Empty;
-        var args = $"-ss {Math.Max(0, seconds):0.###} -i \"{inputVideo}\" " +
+        // 【M6 修复】同上，缩略图起点也按 InvariantCulture 输出。
+        var args = $"-ss {Math.Max(0, seconds).ToString("0.###", CultureInfo.InvariantCulture)} -i \"{inputVideo}\" " +
                    $"{scale}-frames:v 1 -q:v 3 -y \"{outputImagePath}\"";
 
         // 抽帧是一次性短任务，进度无意义，用空接收者满足参数契约。

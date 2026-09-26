@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -32,11 +31,19 @@ public partial class ImageViewModel : ObservableObject
     [ObservableProperty]
     public partial string SelectedMode { get; set; } = "single";
 
+    // 数值输入统一 NumberBox（P0-B）：Value 为 double，直接双向绑定；
+    // 缩放宽高用 NaN 表示「不缩放」——NumberBox 对 NaN 显示为空 + 占位符。
     [ObservableProperty]
-    public partial string TimeSecondsText { get; set; } = "0";
+    public partial double TimeSeconds { get; set; }
 
     [ObservableProperty]
-    public partial string IntervalSecondsText { get; set; } = "5";
+    public partial double IntervalSeconds { get; set; } = 5;
+
+    [ObservableProperty]
+    public partial double ScaleWidth { get; set; } = double.NaN;
+
+    [ObservableProperty]
+    public partial double ScaleHeight { get; set; } = double.NaN;
 
     public ObservableCollection<OptionEntry> FormatOptions { get; } = new()
     {
@@ -46,12 +53,6 @@ public partial class ImageViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string SelectedFormat { get; set; } = "png";
-
-    [ObservableProperty]
-    public partial string ScaleWidthText { get; set; } = string.Empty;
-
-    [ObservableProperty]
-    public partial string ScaleHeightText { get; set; } = string.Empty;
 
     [ObservableProperty]
     public partial string OutputDir { get; set; } = string.Empty;
@@ -80,7 +81,7 @@ public partial class ImageViewModel : ObservableObject
     [ObservableProperty]
     public partial EncodeProgress Progress { get; set; } = new();
 
-    private string FfmpegPath => _config.Load().FfmpegPath;
+    private string FfmpegPath => _config.Load().ResolvedFfmpegPath;
 
     [RelayCommand]
     private async Task ExtractFramesAsync()
@@ -104,13 +105,21 @@ public partial class ImageViewModel : ObservableObject
         var opt = new FrameExtractOptions
         {
             Mode = SelectedMode == "interval" ? FrameMode.Interval : FrameMode.Single,
-            Format = SelectedFormat
+            Format = SelectedFormat,
+            TimeSeconds = TimeSeconds,
+            IntervalSeconds = IntervalSeconds
         };
 
-        if (double.TryParse(TimeSecondsText, NumberStyles.Any, CultureInfo.InvariantCulture, out var t)) opt.TimeSeconds = t;
-        if (double.TryParse(IntervalSecondsText, NumberStyles.Any, CultureInfo.InvariantCulture, out var iv)) opt.IntervalSeconds = iv;
-        if (int.TryParse(ScaleWidthText, out var w)) opt.ScaleWidth = w;
-        if (int.TryParse(ScaleHeightText, out var h)) opt.ScaleHeight = h;
+        // 缩放：NaN / 非正数 = 不缩放（NumberBox 空值即 NaN）
+        if (!double.IsNaN(ScaleWidth) && ScaleWidth > 0)
+        {
+            opt.ScaleWidth = (int)Math.Round(ScaleWidth);
+        }
+
+        if (!double.IsNaN(ScaleHeight) && ScaleHeight > 0)
+        {
+            opt.ScaleHeight = (int)Math.Round(ScaleHeight);
+        }
 
         IsBusy = true;
         _cts = new CancellationTokenSource();

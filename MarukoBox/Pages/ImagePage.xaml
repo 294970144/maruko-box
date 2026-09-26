@@ -47,56 +47,79 @@
                         </Grid>
                     </StackPanel>
 
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Spacing="6">
-                            <TextBlock Text="抽帧模式" Opacity="0.8" />
-                            <ComboBox ItemsSource="{x:Bind ViewModel.ModeOptions, Mode=OneWay}"
-                                      DisplayMemberPath="Name" SelectedValuePath="Value"
-                                      SelectedValue="{x:Bind ViewModel.SelectedMode, Mode=TwoWay}"
-                                      HorizontalAlignment="Stretch" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="6">
-                            <TextBlock Text="输出格式" Opacity="0.8" />
-                            <ComboBox ItemsSource="{x:Bind ViewModel.FormatOptions, Mode=OneWay}"
-                                      DisplayMemberPath="Name" SelectedValuePath="Value"
-                                      SelectedValue="{x:Bind ViewModel.SelectedFormat, Mode=TwoWay}"
-                                      HorizontalAlignment="Stretch" />
-                        </StackPanel>
-                    </Grid>
+                    <!-- ── 抽帧模式 ── -->
+                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="抽帧模式" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.8" />
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="6">
+                                <TextBlock Text="模式" Opacity="0.8" />
+                                <ComboBox ItemsSource="{x:Bind ViewModel.ModeOptions, Mode=OneWay}"
+                                          DisplayMemberPath="Name" SelectedValuePath="Value"
+                                          SelectedValue="{x:Bind ViewModel.SelectedMode, Mode=TwoWay}"
+                                          HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="6">
+                                <TextBlock Text="输出格式" Opacity="0.8" />
+                                <ComboBox ItemsSource="{x:Bind ViewModel.FormatOptions, Mode=OneWay}"
+                                          DisplayMemberPath="Name" SelectedValuePath="Value"
+                                          SelectedValue="{x:Bind ViewModel.SelectedFormat, Mode=TwoWay}"
+                                          HorizontalAlignment="Stretch" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
 
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Spacing="6">
-                            <TextBlock Text="截图时间（秒，单张模式）" Opacity="0.8" />
-                            <TextBox Text="{x:Bind ViewModel.TimeSecondsText, Mode=TwoWay}" PlaceholderText="0" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="6">
-                            <TextBlock Text="间隔（秒，序列帧模式）" Opacity="0.8" />
-                            <TextBox Text="{x:Bind ViewModel.IntervalSecondsText, Mode=TwoWay}" PlaceholderText="5" />
-                        </StackPanel>
-                    </Grid>
+                    <!-- ── 时间参数（P0-B：数值统一 NumberBox，范围由控件拒绝非法输入）── -->
+                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="时间参数" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.8" />
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="6">
+                                <TextBlock Text="截图时间（秒，单张模式）" Opacity="0.8" />
+                                <NumberBox Value="{x:Bind ViewModel.TimeSeconds, Mode=TwoWay}"
+                                           Minimum="0" Maximum="36000" SmallChange="1"
+                                           SpinButtonPlacementMode="Compact" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="6">
+                                <TextBlock Text="间隔（秒，序列帧模式）" Opacity="0.8" />
+                                <NumberBox Value="{x:Bind ViewModel.IntervalSeconds, Mode=TwoWay}"
+                                           Minimum="0.1" Maximum="3600" SmallChange="1"
+                                           SpinButtonPlacementMode="Compact" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
 
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Spacing="6">
-                            <TextBlock Text="缩放宽度（留空不缩放）" Opacity="0.8" />
-                            <TextBox Text="{x:Bind ViewModel.ScaleWidthText, Mode=TwoWay}" PlaceholderText="如 1280" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="6">
-                            <TextBlock Text="缩放高度（留空不缩放）" Opacity="0.8" />
-                            <TextBox Text="{x:Bind ViewModel.ScaleHeightText, Mode=TwoWay}" PlaceholderText="如 720" />
-                        </StackPanel>
-                    </Grid>
+                    <!-- ── 缩放参数（空 = NaN = 不缩放）── -->
+                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="缩放参数" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.8" />
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="6">
+                                <TextBlock Text="缩放宽度（留空不缩放）" Opacity="0.8" />
+                                <NumberBox Value="{x:Bind ViewModel.ScaleWidth, Mode=TwoWay}"
+                                           Minimum="0" Maximum="7680" SmallChange="100"
+                                           SpinButtonPlacementMode="Compact" PlaceholderText="如 1280" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="6">
+                                <TextBlock Text="缩放高度（留空不缩放）" Opacity="0.8" />
+                                <NumberBox Value="{x:Bind ViewModel.ScaleHeight, Mode=TwoWay}"
+                                           Minimum="0" Maximum="7680" SmallChange="100"
+                                           SpinButtonPlacementMode="Compact" PlaceholderText="如 720" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
 
                     <StackPanel Spacing="6">
                         <TextBlock Text="输出目录" Opacity="0.8" />

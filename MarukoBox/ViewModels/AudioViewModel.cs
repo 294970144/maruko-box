@@ -121,7 +121,7 @@ public partial class AudioViewModel : ObservableObject
     [ObservableProperty]
     public partial EncodeProgress Progress { get; set; } = new();
 
-    private string FfmpegPath => _config.Load().FfmpegPath;
+    private string FfmpegPath => _config.Load().ResolvedFfmpegPath;
 
     /// <summary>添加文件到队列（去重）。</summary>
     [RelayCommand]
@@ -129,7 +129,10 @@ public partial class AudioViewModel : ObservableObject
     {
         foreach (var p in paths)
         {
-            if (Queue.Any(i => i.InputPath == p))
+            // 【M10 修复】Windows 路径大小写不敏感，用 == 会把 C:\A\v.mp4 与 c:\a\V.MP4
+            // 当成两个文件入队（两次编码互覆）。与 OutputNaming.IsSamePath /
+            // VideoViewModel 的集合比较统一到 OrdinalIgnoreCase。
+            if (Queue.Any(i => string.Equals(i.InputPath, p, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }
@@ -171,6 +174,15 @@ public partial class AudioViewModel : ObservableObject
             return;
         }
 
+        // 【M5 修复】输出目录校验：OutputDir 来自配置，可能指向已失效的位置
+        // （拔掉的移动硬盘、被删掉的目录），此前直接透传给 ffmpeg → 整批静默失败。
+        var outputDir = OutputPathHelper.EnsureOutputDir(OutputDir, Queue.FirstOrDefault()?.InputPath);
+        if (outputDir is null)
+        {
+            StatusText = "输出目录无效且无法回退到源文件目录，请重新选择输出文件夹";
+            return;
+        }
+
         var preset = new AudioPreset
         {
             Codec = SelectedCodec,
@@ -206,7 +218,7 @@ public partial class AudioViewModel : ObservableObject
                     "mp3" => ".mp3",
                     _ => Path.GetExtension(item.InputPath)
                 };
-                var outPath = OutputNaming.BuildOutputPath(NamingRule, item.InputPath, OutputDir,
+                var outPath = OutputNaming.BuildOutputPath(NamingRule, item.InputPath, outputDir,
                     new OutputNamingContext(item.InputPath, "audio", preset.Codec, string.Empty, ext));
 
                 var prog = new Progress<EncodeProgress>(p =>

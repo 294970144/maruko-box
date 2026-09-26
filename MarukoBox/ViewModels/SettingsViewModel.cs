@@ -165,6 +165,21 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial double UpdateProgressPercent { get; set; }
 
+    /// <summary>
+    /// 下载进度条是否走「不定态」动画：仅当服务器未返回 Content-Length
+    /// （BytesTotal ≤ 0，极罕见）时为 true。此前直接绑 IsDownloading，
+    /// 导致下载全程都是流动动画、真实百分比永不显示（进度条与文字 47% 不匹配的根因）。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsDownloadIndeterminate { get; set; }
+
+    /// <summary>
+    /// 自动检查更新：启动时静默检查一次是否有新版本（仅提示不下载）。
+    /// 即改即存，无需按「保存配置」。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool AutoCheckUpdates { get; set; } = true;
+
     [ObservableProperty]
     public partial string UpdateStatusMessage { get; set; } = string.Empty;
 
@@ -200,10 +215,20 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial string SelectedUpdateSource { get; set; } = "GitHub";
 
+    /// <summary>构造时读到的"生效路径"与"原始配置值"，用于保存时判断用户是否真的改过 ffmpeg 路径。</summary>
+    private string _loadedFfmpegPath = string.Empty;
+
+    /// <summary>配置文件里 ffmpeg 路径的**原始值**（可能是空）。保存时未改动就原样写回。</summary>
+    private string _rawFfmpegPath = string.Empty;
+
     public SettingsViewModel()
     {
         var config = _config.Load();
-        FfmpegPath = config.FfmpegPath;
+        // 【M2】UI 输入框展示"实际生效"的路径（与旧行为一致），
+        // 但记下**原始配置值**用于保存——不要把解析结果写回配置。
+        FfmpegPath = config.ResolvedFfmpegPath;
+        _loadedFfmpegPath = config.ResolvedFfmpegPath;
+        _rawFfmpegPath = config.FfmpegPath;
         OutputDirectory = config.OutputDirectory;
         Theme = CodeToThemeDisplay(config.Theme);
         GpuDevice = config.GpuDevice;
@@ -212,6 +237,7 @@ public partial class SettingsViewModel : ObservableObject
         SelectedOutputFileNameRule = OutputNaming.Normalize(config.OutputFileNameRule);
         OutputFileNamePreview = OutputNaming.Preview(SelectedOutputFileNameRule);
         SelectedUpdateSource = UpdateSourceCodeToDisplay(config.UpdateSource);
+        AutoCheckUpdates = config.AutoCheckUpdates;
 
         // 记录"未保存前"的实际值，Save() 比对时使用——
         // 避免 UI 控件绑定初期就把原值覆写成新值，导致重启判定永远为"未变"。
@@ -241,6 +267,17 @@ public partial class SettingsViewModel : ObservableObject
         PropertyChanged += OnSelfPropertyChanged;
         _baseline = CaptureSnapshot();
 
+        // 构造完成：此后「更新源」「自动检查更新」的变更才写穿到 config（见 _initialized 守卫），
+        // 构造期间绑定初始化产生的回显赋值不落盘。
+        _initialized = true;
+
+        // 启动自动检查若已发现新版本（用户进设置页才构造本 VM），就地把提示亮出来
+        if (App.PendingUpdateTag is not null)
+        {
+            SetUpdateStatus($"发现新版本 {App.PendingUpdateTag}，点击「检查更新」可下载安装",
+                InfoBarSeverity.Informational);
+        }
+
         _ = DetectAsync();
     }
 
@@ -253,8 +290,16 @@ public partial class SettingsViewModel : ObservableObject
     private CancellationTokenSource? _pathValidateCts;
 
     /// <summary>
+    /// 构造完成标志：「更新源」「自动检查更新」为即改即存（写穿 config），
+    /// 仅在构造结束后生效——构造期间的绑定初始化赋值是配置回显，不能当成用户改动再落盘。
+    /// </summary>
+    private bool _initialized;
+
+    /// <summary>
     /// 全量设置快照（值类型/字符串，record 相等性比较）。
     /// 注意编码器以 Type 代码参与比较——EncoderOption 是引用类型，直接比较会恒等。
+    /// v1.9.0 起「更新源」不再入快照：它已改为即改即存（见 OnSelectedUpdateSourceChanged），
+    /// 没有未保存状态，红点/保存按钮对它无意义。
     /// </summary>
     private sealed record SettingSnapshot(
         string FfmpegPath,
@@ -264,8 +309,7 @@ public partial class SettingsViewModel : ObservableObject
         string EncoderCode,
         string UserLevelDisplay,
         bool RememberLastSession,
-        string OutputRule,
-        string UpdateSourceDisplay);
+        string OutputRule);
 
     private SettingSnapshot CaptureSnapshot() => new(
         FfmpegPath,
@@ -275,16 +319,14 @@ public partial class SettingsViewModel : ObservableObject
         SelectedEncoderOption?.Type.ToString() ?? string.Empty,
         SelectedUserLevel,
         RememberLastSession,
-        SelectedOutputFileNameRule,
-        SelectedUpdateSource);
+        SelectedOutputFileNameRule);
 
     /// <summary>被追踪的设置属性变更 → 重新计算 IsDirty。</summary>
     private void OnSelfPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(FfmpegPath) or nameof(OutputDirectory) or nameof(Theme)
             or nameof(GpuDevice) or nameof(SelectedEncoderOption) or nameof(SelectedUserLevel)
-            or nameof(RememberLastSession) or nameof(SelectedOutputFileNameRule)
-            or nameof(SelectedUpdateSource))
+            or nameof(RememberLastSession) or nameof(SelectedOutputFileNameRule))
         {
             IsDirty = CaptureSnapshot() != _baseline;
         }
@@ -447,18 +489,28 @@ public partial class SettingsViewModel : ObservableObject
         var themeChanged = Theme != _savedThemeBeforeSave;
         var levelChanged = SelectedUserLevel != _savedUserLevelBeforeSave;
 
-        var config = new AppConfig
-        {
-            FfmpegPath = FfmpegPath,
-            DefaultEncoder = SelectedEncoderOption?.Type.ToString() ?? "Auto",
-            Theme = ThemeToCode(Theme),
-            OutputDirectory = OutputDirectory,
-            OutputFileNameRule = SelectedOutputFileNameRule,
-            GpuDevice = GpuDevice,
-            UserLevel = UserLevels.DisplayToCode(SelectedUserLevel),
-            RememberLastSession = RememberLastSession,
-            UpdateSource = UpdateSourceDisplayToCode(SelectedUpdateSource)
-        };
+        // 【H1 修复】必须「Load → 改字段 → Save」写穿，不能用 new AppConfig 逐字段赋值。
+        // 后者只赋了 9 个字段，而 AppConfig 有 11 个可持久化属性——未赋值的两个
+        // （AutoCheckUpdates、NavPaneExpandedWidth）会被静默写回默认值：
+        //   1. 用户关掉「自动检查更新」→ 之后改任意设置并保存 → 又变回 true（与用户显式选择相反）
+        //   2. 用户拖过导航栏宽度 → 保存后弹回 320
+        // 与同文件 OnUpdateSourceChanged / OnAutoCheckUpdatesChanged 的写法保持一致。
+        var config = _config.Load();
+
+        // 【M2】ffmpeg 路径：只有用户**真的改过**才写用户值；否则写回配置里的原始值。
+        // UI 里显示的是解析后的生效路径，若直接把它落盘，内置 ffmpeg 存在时会把
+        // "内置路径"持久化，覆盖用户手填的自定义路径（且移走内置后原配置已丢失）。
+        config.FfmpegPath = string.Equals(FfmpegPath, _loadedFfmpegPath, StringComparison.OrdinalIgnoreCase)
+            ? _rawFfmpegPath
+            : FfmpegPath;
+        config.DefaultEncoder = SelectedEncoderOption?.Type.ToString() ?? "Auto";
+        config.Theme = ThemeToCode(Theme);
+        config.OutputDirectory = OutputDirectory;
+        config.OutputFileNameRule = SelectedOutputFileNameRule;
+        config.GpuDevice = GpuDevice;
+        config.UserLevel = UserLevels.DisplayToCode(SelectedUserLevel);
+        config.RememberLastSession = RememberLastSession;
+        config.UpdateSource = UpdateSourceDisplayToCode(SelectedUpdateSource);
         _config.Save(config);
 
         if (themeChanged || levelChanged)
@@ -553,6 +605,50 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnSelectedOutputFileNameRuleChanged(string value)
     {
         OutputFileNamePreview = OutputNaming.Preview(value);
+    }
+
+    /// <summary>
+    /// 更新源即改即存（v1.9.0）：无重启、无校验的轻量网络偏好，改动直接落 config，
+    /// 用户不必为它单独按「保存配置」；因此也从脏追踪快照中移除。
+    /// Load→改→Save 只覆盖磁盘现有状态，不会把 VM 里其它未保存的改动误写进去。
+    /// </summary>
+    partial void OnSelectedUpdateSourceChanged(string value)
+    {
+        if (!_initialized)
+        {
+            return; // 构造期回显赋值，不落盘
+        }
+
+        try
+        {
+            var cfg = _config.Load();
+            cfg.UpdateSource = UpdateSourceDisplayToCode(value);
+            _config.Save(cfg);
+        }
+        catch
+        {
+            // 写穿失败不打断交互：下次「保存配置」仍会带出当前值
+        }
+    }
+
+    /// <summary>自动检查更新开关即改即存（语义同更新源）。</summary>
+    partial void OnAutoCheckUpdatesChanged(bool value)
+    {
+        if (!_initialized)
+        {
+            return;
+        }
+
+        try
+        {
+            var cfg = _config.Load();
+            cfg.AutoCheckUpdates = value;
+            _config.Save(cfg);
+        }
+        catch
+        {
+            // 同上：写穿失败不阻塞 UI
+        }
     }
 
     /// <summary>输出目录变化时同步「打开」按钮可用性。</summary>
@@ -690,6 +786,19 @@ public partial class SettingsViewModel : ObservableObject
         return text.Contains('✓') ? InfoBarSeverity.Success : InfoBarSeverity.Informational;
     }
 
+    /// <summary>
+    /// 下载进度 → 状态文本：有总大小时「已下载 x / y MB（n%）」，未返回总大小时仅显示 MB。
+    /// 与进度条绑定（UpdateProgressPercent / IsDownloadIndeterminate）配套，
+    /// 保证文字与进度条始终表达同一份 <see cref="DownloadProgress"/>。
+    /// </summary>
+    private static string FormatDownloadText(string subject, DownloadProgress p)
+    {
+        var doneMb = p.BytesDone / 1024d / 1024d;
+        return p.BytesTotal > 0
+            ? $"{subject}… 已下载 {doneMb:F1} / {p.BytesTotal / 1024d / 1024d:F1} MB（{p.BytesDone * 100.0 / p.BytesTotal:F0}%）"
+            : $"{subject}… 已下载 {doneMb:F1} MB";
+    }
+
     // ---------- 更新源显示名 <-> 配置代码 ----------
 
     /// <summary>
@@ -726,7 +835,13 @@ public partial class SettingsViewModel : ObservableObject
         IsCheckingUpdate = true;
         IsDownloading = false;
         UpdateProgressPercent = 0;
+        IsDownloadIndeterminate = false;
         SetUpdateStatus("正在检查软件更新…", InfoBarSeverity.Informational);
+
+        // 手动检查启动即熄灭导航徽标与待处理提示（无论结果如何，用户已亲自确认过）
+        App.PendingUpdateTag = null;
+        (App.Window as MainWindow)?.SetUpdateAvailable(false);
+
         try
         {
             var source = SelectedUpdateSource == "CN" ? UpdateSource.CN : UpdateSource.GitHub;
@@ -740,7 +855,7 @@ public partial class SettingsViewModel : ObservableObject
                 return;
             }
 
-            var confirmed = await ConfirmAppUpdateAsync(current, latest.Tag);
+            var confirmed = await ConfirmAppUpdateAsync(current, latest.Tag, latest.SizeBytes);
             if (!confirmed)
             {
                 SetUpdateStatus("已取消更新", InfoBarSeverity.Informational);
@@ -748,10 +863,16 @@ public partial class SettingsViewModel : ObservableObject
             }
 
             IsDownloading = true;
-            var progress = new Progress<double>(p => App.RunOnUiThread(() =>
+            IsDownloadIndeterminate = false;
+            var progress = new Progress<DownloadProgress>(p => App.RunOnUiThread(() =>
             {
-                UpdateProgressPercent = Math.Round(p, 1);
-                SetUpdateStatus($"正在下载 {latest.Tag} 安装包… {p:F0}%", InfoBarSeverity.Informational);
+                // 总大小未知（BytesTotal ≤ 0）时进度条退回不定态、百分比保持 0
+                UpdateProgressPercent = p.BytesTotal > 0
+                    ? Math.Round(p.BytesDone * 100.0 / p.BytesTotal, 1)
+                    : 0;
+                IsDownloadIndeterminate = p.BytesTotal <= 0;
+                SetUpdateStatus(FormatDownloadText($"正在下载 {latest.Tag} 安装包", p),
+                    InfoBarSeverity.Informational);
             }));
 
             var installer = await _update.DownloadAppInstallerAsync(
@@ -787,20 +908,26 @@ public partial class SettingsViewModel : ObservableObject
             IsCheckingUpdate = false;
             IsDownloading = false;
             UpdateProgressPercent = 0;
+            IsDownloadIndeterminate = false;
         }
     }
 
-    /// <summary>弹窗确认是否下载安装新软件版本。</summary>
-    private async Task<bool> ConfirmAppUpdateAsync(string currentVersion, string newTag)
+    /// <summary>弹窗确认是否下载安装新软件版本（带精确安装包大小）。</summary>
+    private async Task<bool> ConfirmAppUpdateAsync(string currentVersion, string newTag, long sizeBytes)
     {
         try
         {
+            // 【E5 同源修复】大小不再硬编码"约 100 MB"——GitHub 取资产 size、
+            // CN 源 HEAD 探测 Content-Length（UpdateService 侧补齐）；都拿不到才回退旧文案。
+            var sizePart = sizeBytes > 0
+                ? $"安装包 {sizeBytes / 1024d / 1024d:F1} MB"
+                : "安装包约 100 MB";
             var dialog = new ContentDialog
             {
                 XamlRoot = App.Window.Content.XamlRoot,
                 Title = "发现新版本",
                 Content = $"当前版本：{currentVersion}\n最新版本：{newTag}\n\n" +
-                          "是否下载并安装？（约 100 MB，下载完成后将启动安装程序，本应用将退出）",
+                          $"是否下载并安装？（{sizePart}，下载完成后将启动安装程序，本应用将退出）",
                 PrimaryButtonText = "下载并安装",
                 CloseButtonText = "取消",
                 DefaultButton = ContentDialogButton.Primary
@@ -840,7 +967,8 @@ public partial class SettingsViewModel : ObservableObject
         try
         {
             // 1) ffmpeg 生效路径
-            var ffmpegPath = _config.Load().FfmpegPath;
+            // 【M2】这里要的是"实际生效"的路径，用 ResolvedFfmpegPath（FfmpegPath 是原始配置值，可能为空）
+            var ffmpegPath = _config.Load().ResolvedFfmpegPath;
             if (string.IsNullOrWhiteSpace(ffmpegPath) || !File.Exists(ffmpegPath))
             {
                 sb.AppendLine("✗ ffmpeg：未找到（可在下方安装内置版，或手动设置路径）");
@@ -961,16 +1089,23 @@ public partial class SettingsViewModel : ObservableObject
     {
         IsDownloading = true;
         UpdateProgressPercent = 0;
-        var progress = new Progress<double>(p => App.RunOnUiThread(() =>
+        IsDownloadIndeterminate = false;
+        var progress = new Progress<DownloadProgress>(p => App.RunOnUiThread(() =>
         {
-            UpdateProgressPercent = Math.Round(p, 1);
-            SetUpdateStatus($"正在下载 ffmpeg {target.Tag}… {p:F0}%", InfoBarSeverity.Informational);
+            UpdateProgressPercent = p.BytesTotal > 0
+                ? Math.Round(p.BytesDone * 100.0 / p.BytesTotal, 1)
+                : 0;
+            IsDownloadIndeterminate = p.BytesTotal <= 0;
+            SetUpdateStatus(FormatDownloadText($"正在下载 ffmpeg {target.Tag}", p),
+                InfoBarSeverity.Informational);
         }));
 
         await _update.DownloadAndInstallAsync(target.DownloadUrl, target.Tag, progress);
 
         // 内置版本已替换：重新解析生效路径（内置优先）并刷新能力检测
-        FfmpegPath = _config.Load().FfmpegPath;
+        // 【M2】UI 与随后的能力检测都要"生效路径"，用 ResolvedFfmpegPath
+        FfmpegPath = _config.Load().ResolvedFfmpegPath;
+        _loadedFfmpegPath = FfmpegPath;
         BundledVersionText = target.Tag;
         RefreshFfmpegBundledState();
 
@@ -1035,11 +1170,21 @@ public partial class SettingsViewModel : ObservableObject
         row.ProgressPercent = 0;
         try
         {
-            var progress = new Progress<double>(p => App.RunOnUiThread(() =>
-                row.ProgressPercent = Math.Round(p, 1)));
+            // 行内进度（row.ProgressPercent）保留百分比；总大小未知时保持 0，
+            // 同时用顶部状态条显示 MB 计数兜底，保证专家强装也有可读进度
+            var progress = new Progress<DownloadProgress>(p => App.RunOnUiThread(() =>
+            {
+                row.ProgressPercent = p.BytesTotal > 0
+                    ? Math.Round(p.BytesDone * 100.0 / p.BytesTotal, 1)
+                    : 0;
+                SetUpdateStatus(FormatDownloadText($"正在下载 ffmpeg {row.Tag}", p),
+                    InfoBarSeverity.Informational);
+            }));
             await _update.DownloadAndInstallAsync(row.AssetUrl, row.Tag, progress);
 
-            FfmpegPath = _config.Load().FfmpegPath;
+            // 【M2】同上：用生效路径
+            FfmpegPath = _config.Load().ResolvedFfmpegPath;
+            _loadedFfmpegPath = FfmpegPath;
             BundledVersionText = row.Tag;
             RefreshFfmpegBundledState();
 

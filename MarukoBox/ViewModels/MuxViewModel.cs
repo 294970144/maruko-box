@@ -60,7 +60,7 @@ public partial class MuxViewModel : ObservableObject
     [ObservableProperty]
     public partial EncodeProgress Progress { get; set; } = new();
 
-    private string FfmpegPath => _config.Load().FfmpegPath;
+    private string FfmpegPath => _config.Load().ResolvedFfmpegPath;
 
     [RelayCommand]
     private void AddVideo(IEnumerable<string> paths) => AddInputs(paths);
@@ -75,7 +75,8 @@ public partial class MuxViewModel : ObservableObject
     {
         foreach (var p in paths)
         {
-            if (!Inputs.Any(i => i.FilePath == p))
+            // 【M10 修复】路径比较统一为大小写不敏感（理由同 AudioViewModel.AddFiles）
+            if (!Inputs.Any(i => string.Equals(i.FilePath, p, StringComparison.OrdinalIgnoreCase)))
             {
                 Inputs.Add(new MuxInput(p));
             }

@@ -59,7 +59,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" Content="清空" Command="{x:Bind ViewModel.ClearQueueCommand, Mode=OneWay}" HorizontalAlignment="Stretch" />
+                <Button Grid.Column="0" Content="清空" Click="ClearQueue_Click" HorizontalAlignment="Stretch" />
                 <Button Grid.Column="1" Content="{x:Bind ViewModel.Queue.Count, Mode=OneWay}" IsEnabled="False" />
             </Grid>
 
@@ -141,6 +141,10 @@
                                       HorizontalAlignment="Stretch" />
                         </StackPanel>
 
+                        <!-- 弱分隔线（可见性随相邻组，普通级单字段时不显示） -->
+                        <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}" />
+
                         <!-- CQP：恒定质量 -->
                         <StackPanel Spacing="6"
                                     Visibility="{x:Bind ViewModel.ShowGpuCqp, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
@@ -148,6 +152,9 @@
                             <NumberBox Value="{x:Bind ViewModel.Settings.Quality, Mode=TwoWay}"
                                        Minimum="0" Maximum="51" SmallChange="1" SpinButtonPlacementMode="Compact" />
                         </StackPanel>
+
+                        <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}" />
 
                         <!-- 码率类（高手及以上） -->
                         <StackPanel Spacing="6"
@@ -166,12 +173,18 @@
                             </StackPanel>
                         </StackPanel>
 
+                        <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}" />
+
                         <StackPanel Spacing="6"
                                     Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                             <TextBlock Text="Preset (p1~p7)" Opacity="0.8" />
                             <NumberBox Value="{x:Bind ViewModel.Settings.GpuPreset, Mode=TwoWay}"
                                        Minimum="1" Maximum="7" SmallChange="1" SpinButtonPlacementMode="Compact" Width="160" />
                         </StackPanel>
+
+                        <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}" />
 
                         <StackPanel Spacing="6"
                                     Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
@@ -181,6 +194,9 @@
                                       SelectedValue="{x:Bind ViewModel.SelectedProfile, Mode=TwoWay}"
                                       Width="160" HorizontalAlignment="Left" />
                         </StackPanel>
+
+                        <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}" />
 
                         <StackPanel Spacing="6"
                                     Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
@@ -210,12 +226,18 @@
                                   HorizontalAlignment="Stretch" />
                     </StackPanel>
 
+                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}" />
+
                     <StackPanel Spacing="6"
                                 Visibility="{x:Bind ViewModel.ShowCpuCrf, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
                         <TextBlock Text="CRF (0~51，越低越好)" Opacity="0.8" />
                         <NumberBox Value="{x:Bind ViewModel.Settings.Crf, Mode=TwoWay}"
                                    Minimum="0" Maximum="51" SmallChange="1" SpinButtonPlacementMode="Compact" />
                     </StackPanel>
+
+                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}" />
 
                     <StackPanel Spacing="6"
                                 Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
@@ -227,6 +249,9 @@
                         </StackPanel>
                     </StackPanel>
 
+                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}" />
+
                     <StackPanel Spacing="6"
                                 Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
                         <TextBlock Text="Preset" Opacity="0.8" />
@@ -234,6 +259,9 @@
                                   SelectedItem="{x:Bind ViewModel.SelectedCpuPreset, Mode=TwoWay}"
                                   HorizontalAlignment="Stretch" />
                     </StackPanel>
+
+                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Developer'}" />
 
                     <StackPanel Spacing="6"
                                 Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Developer'}">

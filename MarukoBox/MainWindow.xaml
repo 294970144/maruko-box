@@ -12,7 +12,18 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid>
+    <!-- 导航窗格拖拽调宽（v1.9.1 根网格热区方案）：不再用独立命中窄条——
+         整个根网格监听指针，按「指针 X 距窗格右缘 ≤6px」判定热区：
+         热区内显示左右调整光标，按下开始拖拽（捕获指针）。
+         v1.9.0 的 10px Border 方案死于：PointerEntered 把 Background 换成
+         Application.Resources 里找不到的画刷（null）→ 元素失去命中测试，
+         首次悬停后热区即失效，Pressed/Moved 永不触发。 -->
+    <Grid x:Name="RootGrid"
+          PointerMoved="RootGrid_PointerMoved"
+          PointerPressed="RootGrid_PointerPressed"
+          PointerReleased="RootGrid_PointerReleased"
+          PointerCanceled="RootGrid_PointerCanceled"
+          PointerCaptureLost="RootGrid_PointerCaptureLost">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -79,7 +90,17 @@
                 <!-- 功能菜单 / 系统菜单 分组分隔（结构化认知：上方为功能入口，下方为系统入口） -->
                 <NavigationViewItemSeparator />
 
-                <NavigationViewItem Content="设置" Tag="Settings">
+                <NavigationViewItem Tag="Settings">
+                    <NavigationViewItem.Content>
+                        <!-- 标题 + 新版徽标：启动自动检查发现新版本时点亮（SetUpdateAvailable） -->
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <TextBlock Text="设置" />
+                            <InfoBadge x:Name="UpdateAvailableBadge"
+                                       Style="{ThemeResource AttentionDotInfoBadgeStyle}"
+                                       Visibility="Collapsed"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </NavigationViewItem.Content>
                     <NavigationViewItem.Icon>
                         <SymbolIcon Symbol="Setting" />
                     </NavigationViewItem.Icon>

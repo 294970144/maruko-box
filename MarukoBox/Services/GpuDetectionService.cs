@@ -98,16 +98,43 @@ public class GpuDetectionService : IGpuDetectionService
             info.FfmpegVersion = ParseFfmpegVersion(await versionTask);
 
             var encoders = await encodersTask;
-            info.HasNvencHevc = encoders.Contains("hevc_nvenc", StringComparison.OrdinalIgnoreCase);
-            info.HasNvencH264 = encoders.Contains("h264_nvenc", StringComparison.OrdinalIgnoreCase);
-            info.HasAmf = encoders.Contains("hevc_amf", StringComparison.OrdinalIgnoreCase);
-            info.HasQsv = encoders.Contains("hevc_qsv", StringComparison.OrdinalIgnoreCase);
+            var nvencHevcListed = encoders.Contains("hevc_nvenc", StringComparison.OrdinalIgnoreCase);
+            var nvencH264Listed = encoders.Contains("h264_nvenc", StringComparison.OrdinalIgnoreCase);
+            var amfListed = encoders.Contains("hevc_amf", StringComparison.OrdinalIgnoreCase);
+            var qsvListed = encoders.Contains("hevc_qsv", StringComparison.OrdinalIgnoreCase);
 
             var filters = await filtersTask;
-            info.HasCudaScale = filters.Contains("scale_cuda", StringComparison.OrdinalIgnoreCase);
+            var cudaScaleListed = filters.Contains("scale_cuda", StringComparison.OrdinalIgnoreCase);
 
             var hwaccels = await hwaccelsTask;
-            info.HasCudaDecode = hwaccels.Contains("cuda", StringComparison.OrdinalIgnoreCase);
+            var cudaDecodeListed = hwaccels.Contains("cuda", StringComparison.OrdinalIgnoreCase);
+
+            // ---------- 5.5 真实可用性探测（C3 修复）----------
+            // `ffmpeg -encoders` 只说明"这个后端被编译进了 ffmpeg"，**不代表本机真能起来**。
+            // jellyfin-ffmpeg 便携版无条件编译进 nvenc / amf / qsv 全套，因此旧逻辑在
+            // 没有对应显卡的机器上也会把 Has* 全置 true：
+            //   → Auto（默认）恒解析成 hevc_nvenc，并在 BuildCoreArguments 追加
+            //     -hwaccel cuda，编解码两侧都在**初始化阶段**失败；
+            //   → 叠加 C1（回退的 x264 参数本来也是坏的）时非 N 卡用户没有任何可用路径；
+            //   → 同时设置页 Summary 会一边显示 GpuName="未检测到"、一边给 Success 绿横幅。
+            // 现在对每种后端**真编 5 帧到 null 输出**，只有退出码为 0 才认定可用。
+            // 尺寸不能取 64x64：NVENC 有最小帧尺寸限制，实测报
+            // "Frame dimensions are less than the minimum supported value"（320x240 正常）。
+            var probeNvencHevc = nvencHevcListed ? ProbeEncoderAsync(path, "hevc_nvenc", ct) : Task.FromResult(false);
+            var probeNvencH264 = nvencH264Listed ? ProbeEncoderAsync(path, "h264_nvenc", ct) : Task.FromResult(false);
+            var probeAmf = amfListed ? ProbeEncoderAsync(path, "hevc_amf", ct) : Task.FromResult(false);
+            var probeQsv = qsvListed ? ProbeEncoderAsync(path, "hevc_qsv", ct) : Task.FromResult(false);
+
+            info.HasNvencHevc = nvencHevcListed && await probeNvencHevc;
+            info.HasNvencH264 = nvencH264Listed && await probeNvencH264;
+            info.HasAmf = amfListed && await probeAmf;
+            info.HasQsv = qsvListed && await probeQsv;
+
+            // cuda 解码/缩放是 NVIDIA 专属：探测不通过时即使 -hwaccels 列了 cuda 也不能用，
+            // 否则会把系统内存帧喂给 scale_cuda（N9 那一类错误）。
+            var nvidiaUsable = info.HasNvencHevc || info.HasNvencH264;
+            info.HasCudaDecode = cudaDecodeListed && nvidiaUsable;
+            info.HasCudaScale = cudaScaleListed && info.HasCudaDecode;
 
             // ---------- 6. 显卡型号与驱动（nvidia-smi） ----------
             await DetectNvidiaGpuAsync(info, ct);
@@ -255,6 +282,65 @@ public class GpuDetectionService : IGpuDetectionService
         }
 
         return parts[0];
+    }
+
+    /// <summary>
+    /// 【C3 修复】真实可用性探测：用指定编码器实际编 5 帧到 null 输出，
+    /// 退出码为 0 才算"本机可用"。任何异常/超时一律按不可用处理（宁可回退 CPU）。
+    /// </summary>
+    private static async Task<bool> ProbeEncoderAsync(string ffmpegPath, string codec, CancellationToken ct)
+    {
+        try
+        {
+            // testsrc 320x240：足够大以避开 NVENC 的最小帧尺寸限制，又足够小以保证探测够快。
+            var code = await RunExitCodeAsync(
+                ffmpegPath,
+                $"-hide_banner -loglevel error -f lavfi -i testsrc=s=320x240:d=1:r=25 -c:v {codec} -frames:v 5 -f null -",
+                ct);
+
+            App.LogInfo($"编码器探测 {codec}：退出码 {code}（{(code == 0 ? "可用" : "不可用")}）");
+            return code == 0;
+        }
+        catch (Exception ex)
+        {
+            App.LogInfo($"编码器探测 {codec} 失败，按不可用处理：{ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>启动外部进程，只关心退出码（丢弃输出）。</summary>
+    private static async Task<int> RunExitCodeAsync(string fileName, string arguments, CancellationToken ct)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = fileName,
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+
+        using var process = Process.Start(psi)
+            ?? throw new InvalidOperationException($"无法启动进程：{fileName}");
+
+        // 与 RunAsync 同样必须并发抽干两个流，否则缓冲区满会令进程永不退出。
+        var outTask = process.StandardOutput.ReadToEndAsync(ct);
+        var errTask = process.StandardError.ReadToEndAsync(ct);
+        var waitTask = process.WaitForExitAsync(ct);
+
+        var completed = await Task.WhenAny(waitTask, Task.Delay(ProcessTimeoutMs, ct));
+        if (completed != waitTask)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { /* 忽略 */ }
+            try { await Task.WhenAll(outTask, errTask); } catch { /* 忽略 */ }
+            throw new TimeoutException($"进程执行超时：{fileName} {arguments}");
+        }
+
+        try { await Task.WhenAll(outTask, errTask); } catch { /* 取消时忽略 */ }
+        return process.ExitCode;
     }
 
     /// <summary>

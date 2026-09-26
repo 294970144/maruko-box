@@ -37,7 +37,7 @@ public partial class TrimViewModel : ObservableObject
     private string NamingRule =>
         _namingRule ??= OutputNaming.Normalize(_config.Load().OutputFileNameRule);
 
-    private string FfmpegPath => _config.Load().FfmpegPath;
+    private string FfmpegPath => _config.Load().ResolvedFfmpegPath;
 
     // ---------- 输入 ----------
 
