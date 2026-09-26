@@ -98,6 +98,12 @@ public interface IUpdateService
     Task DownloadAndInstallAsync(string downloadUrl, string versionTag,
         IProgress<double>? progress = null, CancellationToken ct = default);
 
+    /// <summary>
+    /// 【N8】最近一次下载安装是否因来源未提供 .sha256 而跳过校验。
+    /// 每轮 DownloadAndInstallAsync 开始时重置，校验文件缺失时置位，供 UI 显式提示。
+    /// </summary>
+    bool LastChecksumMissing { get; }
+
     /// <summary>下载软件安装包到临时目录并返回完整路径（不自动运行，由调用方启动安装器）。</summary>
     Task<string> DownloadAppInstallerAsync(string downloadUrl, string version,
         IProgress<double>? progress = null, CancellationToken ct = default);
@@ -140,6 +146,27 @@ public sealed partial class UpdateService : IUpdateService
         // 92MB 解压体 / 34MB 压缩包 / 97MB 安装包在慢速网络下需要足够长的下载窗口
         Timeout = TimeSpan.FromMinutes(10)
     };
+
+    /// <summary>
+    /// 【S5 修复】元数据类请求专用客户端（Release JSON / 镜像目录索引 / 校验文件）：
+    /// 限 10MB 响应上限，防异常响应（被污染的 CDN、超大 HTML）全量读入内存。
+    /// 与 <see cref="_http"/>（大文件下载：34MB zip / 97MB 安装包）分开——
+    /// 不能直接给 _http 设上限，否则 ffmpeg zip 下载会被 10MB 上限误杀。
+    /// </summary>
+    private readonly HttpClient _metaHttp = new()
+    {
+        Timeout = TimeSpan.FromSeconds(60),
+        MaxResponseContentBufferSize = 10 * 1024 * 1024
+    };
+
+    /// <summary>【N6 修复】安装互斥门：ffmpeg 整目录替换（换名→换入）的序列不允许并发。</summary>
+    private static readonly SemaphoreSlim InstallGate = new(1, 1);
+
+    /// <summary>
+    /// 【N8】最近一次下载安装是否因来源未提供 .sha256 而跳过校验。
+    /// CN 镜像源（纯目录索引）与未随包发布校验文件的 Release 都会置位，供 UI 显式提示。
+    /// </summary>
+    public bool LastChecksumMissing { get; private set; }
 
     /// <summary>
     /// 软件安装包下载目录：用户专属的 <c>%LOCALAPPDATA%\MarukoBox\Updates\</c>。
@@ -569,7 +596,7 @@ public sealed partial class UpdateService : IUpdateService
         using var request = new HttpRequestMessage(HttpMethod.Get, apiUrl);
         request.Headers.UserAgent.ParseAdd($"MarukoBox/{GetAppVersionStatic()} (+https://github.com/294970144/maruko-box)");
 
-        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+        using var response = await _metaHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
@@ -583,7 +610,7 @@ public sealed partial class UpdateService : IUpdateService
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.UserAgent.ParseAdd($"MarukoBox/{GetAppVersionStatic()}");
 
-        using var response = await _http
+        using var response = await _metaHttp
             .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
@@ -633,6 +660,25 @@ public sealed partial class UpdateService : IUpdateService
 
     /// <inheritdoc/>
     public async Task DownloadAndInstallAsync(string downloadUrl, string versionTag,
+        IProgress<double>? progress = null, CancellationToken ct = default)
+    {
+        // 【N6 修复】专家级版本列表的多行「安装」按钮可各自独立触发，两个安装并发会在
+        // BundledDir 换名→换入的替换序列里交错（A 把目录移走后，B 对已不存在的目录再做
+        // Move 直接抛异常），产生混乱报错与 .old 残留。全程互斥后不再依赖自愈兜底。
+        await InstallGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // 【N8】每轮安装重置「校验缺失」标记，由 VerifyDownloadAsync 按实际来源置位
+            LastChecksumMissing = false;
+            await InstallCoreAsync(downloadUrl, versionTag, progress, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            InstallGate.Release();
+        }
+    }
+
+    private async Task InstallCoreAsync(string downloadUrl, string versionTag,
         IProgress<double>? progress = null, CancellationToken ct = default)
     {
         var tempZip = Path.Combine(Path.GetTempPath(), $"MarukoBox_ffmpeg_{Guid.NewGuid():N}.zip");
@@ -847,7 +893,7 @@ public sealed partial class UpdateService : IUpdateService
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, checksumUrl);
             request.Headers.UserAgent.ParseAdd($"MarukoBox/{GetAppVersionStatic()}");
-            using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+            using var response = await _metaHttp.SendAsync(request, ct).ConfigureAwait(false);
 
             // 没有随包发布校验文件时（旧 Release 或镜像源缺失），返回 null 由调用方决定策略
             if (response.StatusCode == HttpStatusCode.NotFound)
@@ -892,6 +938,7 @@ public sealed partial class UpdateService : IUpdateService
             // 所以这里只做"能做的那一半"——防传输截断 / CDN 污染 / 镜像站内容漂移，
             // 真正防篡改要靠安装包签名（Authenticode）。
             App.LogInfo($"未提供 .sha256 校验文件，跳过校验（实际 SHA-256={actual}）");
+            LastChecksumMissing = true; // 【N8】不再只进日志，上抛给 UI 显式提示
             return true;
         }
 

@@ -38,6 +38,18 @@ public sealed partial class MainWindow : Window
     private const int MinWindowHeight = 640;
 
     /// <summary>
+    /// 「设置」导航项上的重启提醒徽标：主题 / 用户级别保存后选择「稍后重启」时点亮，
+    /// 直到用户不再有未生效的重启类修改（再次保存恢复原值）或应用重启。
+    /// </summary>
+    public void SetRestartPending(bool visible)
+    {
+        if (RestartPendingBadge is not null)
+        {
+            RestartPendingBadge.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
     /// 保持习惯：若配置开启，则从当前 Frame 找到视频页并把参数快照写入 session.json。
     /// 由 App.OnLaunched 挂到 Window.Closed（含「立即重启」的 Exit 流程）。
     /// 静态方法 + 容错：任何失败都不应阻塞退出。
@@ -51,12 +63,17 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            if (App.Window?.Content is not FrameworkElement root)
+            if (App.Window?.Content is null)
             {
                 return;
             }
 
-            var frame = FindDescendant<Frame>(root);
+            // 【N1 修复】直接用 XAML 里 x:Name 的 ContentFrame。
+            // 此前经 FindDescendant<Frame> 在视觉树里找 Frame，但该实现只递归 Panel 派生类的
+            // Children——NavigationView（ContentControl）与 TitleBar（Control）都不是 Panel，
+            // 其模板内的 Frame 属于结构性盲区，递归恒返回 null，导致「保持习惯」从未真正保存。
+            // 官方范式就是直接引用命名元素，无需视觉树遍历。
+            var frame = (App.Window as MainWindow)?.ContentFrame;
 
             // 合并式保存：读出已有快照，只更新「当前可见页」对应的块，再整体写回，
             // 避免视频页与裁剪页的「保持习惯」参数互相覆盖（此前只会保存视频页）。
@@ -81,26 +98,6 @@ public sealed partial class MainWindow : Window
         {
             // 会话保存失败不阻塞退出
         }
-    }
-
-    private static T? FindDescendant<T>(FrameworkElement root) where T : class
-    {
-        foreach (var child in (root as Panel)?.Children ?? Enumerable.Empty<UIElement>())
-        {
-            if (child is T match)
-            {
-                return match;
-            }
-            if (child is FrameworkElement fe)
-            {
-                var sub = FindDescendant<T>(fe);
-                if (sub is not null)
-                {
-                    return sub;
-                }
-            }
-        }
-        return null;
     }
 
     private void NavView_Loaded(object sender, RoutedEventArgs e)

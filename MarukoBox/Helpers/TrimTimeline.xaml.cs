@@ -264,7 +264,8 @@ public sealed partial class TrimTimeline : UserControl
         Layout();
 
         Committed?.Invoke(this, EventArgs.Empty);
-        _ = handle; // 保留供将来按端点区分行为
+        // 【N15 修复】删除占位语句 "_ = handle;"——纯噪声。将来真要按端点区分行为时
+        // 再显式引入，而不是留一个喂给下划线的假引用。
         e.Handled = true;
     }
 

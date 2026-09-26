@@ -6,32 +6,24 @@
     <Nullable>enable</Nullable>
     <AssemblyName>MarukoBox.Harness</AssemblyName>
     <!-- 与主程序版本一致，使软件版本冒烟显示真实值（而非默认 1.0.0） -->
-    <Version>1.7.4</Version>
+    <Version>1.8.0</Version>
+    <!-- 【MARUKO_HARNESS】GpuInfo 等模型里的 WinUI 专属成员以此符号排除（见 GpuInfo.cs） -->
+    <DefineConstants>$(DefineConstants);MARUKO_HARNESS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
   </ItemGroup>
 
-  <!-- 直接复用 MarukoBox 工程的真实源码（服务层 + 模型层），不复制 -->
+  <!-- 直接复用 MarukoBox 工程的真实源码（服务层 + 模型层），不复制。
+       【D2 修复】Models / Services 改通配：新增文件不再要求手动同步本清单
+       （上轮 GpuInfo 加了 WinUI 成员 + Harness 漏同步组合过一次编译断裂）。
+       Helpers 目录混有 WinUI 依赖文件（FileDropHelper / PickerHelper / ShellHelper /
+       TrimTimeline.xaml.cs），维持显式纳入两个纯逻辑文件。 -->
   <ItemGroup>
+    <Compile Include="..\MarukoBox\Models\*.cs" />
+    <Compile Include="..\MarukoBox\Services\*.cs" />
     <Compile Include="..\MarukoBox\Helpers\OutputNaming.cs" />
     <Compile Include="..\MarukoBox\Helpers\OutputPathHelper.cs" />
-    <Compile Include="..\MarukoBox\Services\FfmpegService.cs" />
-    <Compile Include="..\MarukoBox\Services\GpuDetectionService.cs" />
-    <Compile Include="..\MarukoBox\Services\ConfigService.cs" />
-    <Compile Include="..\MarukoBox\Services\UpdateService.cs" />
-    <Compile Include="..\MarukoBox\Models\SessionState.cs" />
-    <Compile Include="..\MarukoBox\Models\QualityPresets.cs" />
-    <Compile Include="..\MarukoBox\Models\EncoderType.cs" />
-    <Compile Include="..\MarukoBox\Models\GpuInfo.cs" />
-    <Compile Include="..\MarukoBox\Models\EncodeSettings.cs" />
-    <Compile Include="..\MarukoBox\Models\EncodeProgress.cs" />
-    <Compile Include="..\MarukoBox\Models\EncodeItem.cs" />
-    <Compile Include="..\MarukoBox\Models\MediaFileInfo.cs" />
-    <Compile Include="..\MarukoBox\Models\MediaStreamInfo.cs" />
-    <Compile Include="..\MarukoBox\Models\AudioPreset.cs" />
-    <Compile Include="..\MarukoBox\Models\FrameExtractOptions.cs" />
-    <Compile Include="..\MarukoBox\Models\TrimRequest.cs" />
   </ItemGroup>
 </Project>

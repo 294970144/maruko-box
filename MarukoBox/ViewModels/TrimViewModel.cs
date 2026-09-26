@@ -185,6 +185,9 @@ public partial class TrimViewModel : ObservableObject
 
     // ---------- 载入视频 ----------
 
+    /// <summary>【N13 修复】主加载互斥令牌：新载入作废旧载入，旧探测返回后不再触碰 UI 状态。</summary>
+    private CancellationTokenSource? _loadCts;
+
     /// <summary>
     /// 载入视频：探测时长、重置区间、生成默认输出路径、抽首尾帧缩略图。
     /// </summary>
@@ -197,12 +200,26 @@ public partial class TrimViewModel : ObservableObject
             return false;
         }
 
+        // 【N13 修复】快速连续载入两个视频时，两个 ProbeInfoAsync 会并发跑、
+        // 后完成者覆盖前者（缩略图本有 CTS 保护，主加载此前没有）。
+        // 每次载入作废上一次；不把 token 传给探测本身（避免旧探测抛 OCE 打断新流程），
+        // 只在探测返回后检查——过期的它不再写任何状态。
+        _loadCts?.Cancel();
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        var cts = _loadCts;
+
         InputPath = path;
         HasVideo = true;
         PreviewFailed = false;
         StatusText = "正在解析视频…";
 
         var info = await _ffmpeg.ProbeInfoAsync(FfmpegPath, path);
+        if (cts.IsCancellationRequested)
+        {
+            return false; // 已被更新的载入取代
+        }
+
         var duration = info.Duration;
 
         if (duration <= TimeSpan.Zero)
@@ -221,6 +238,10 @@ public partial class TrimViewModel : ObservableObject
         RefreshOutputPath();
 
         await RefreshThumbnailsAsync();
+        if (cts.IsCancellationRequested)
+        {
+            return false; // 已被更新的载入取代
+        }
 
         StatusText = $"已载入：{Path.GetFileName(path)}（总长 {DurationText}）";
         return true;
@@ -402,7 +423,46 @@ public partial class TrimViewModel : ObservableObject
             path = Path.Combine(dir, $"{name}_trim{ext}");
         }
 
-        OutputPath = path;
+        OutputPath = DedupeSessionOutput(path);
+    }
+
+    /// <summary>
+    /// 【N3 修复】会话内防互覆：本次运行里已分配给「其他源文件」的自动输出路径，
+    /// 再撞上时自动追加序号（video_2.mp4 …）。
+    /// 场景：固定输出目录 + 「原名」规则时，先后裁剪 A\video.mp4 与 B\video.mp4，
+    /// 两者的自动输出路径相同，后一次会静默覆盖前一次的产物。
+    /// 同一源文件因参数变化重算得到同一路径属正常情形，直接沿用。
+    /// 用户手动指定的输出路径不经此处（以用户为准）。
+    /// </summary>
+    private readonly Dictionary<string, string> _assignedOutputs = new(StringComparer.OrdinalIgnoreCase);
+
+    private string DedupeSessionOutput(string candidate)
+    {
+        if (_assignedOutputs.TryGetValue(candidate, out var owner))
+        {
+            if (string.Equals(owner, InputPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return candidate; // 自己占用，沿用
+            }
+        }
+        else
+        {
+            _assignedOutputs[candidate] = InputPath ?? string.Empty;
+            return candidate;
+        }
+
+        var dir = Path.GetDirectoryName(candidate) ?? string.Empty;
+        var name = Path.GetFileNameWithoutExtension(candidate);
+        var ext = Path.GetExtension(candidate);
+        for (var i = 2; ; i++)
+        {
+            var next = Path.Combine(dir, $"{name}_{i}{ext}");
+            if (!_assignedOutputs.ContainsKey(next))
+            {
+                _assignedOutputs[next] = InputPath ?? string.Empty;
+                return next;
+            }
+        }
     }
 
     // ---------- 执行裁剪 ----------

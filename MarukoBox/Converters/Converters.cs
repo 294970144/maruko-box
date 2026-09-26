@@ -70,6 +70,33 @@ public sealed class InvertBoolToVisibility : IValueConverter
 }
 
 /// <summary>
+/// 将「校验是否失败」映射为输入框边框画刷：
+/// 失败 → 系统关键色（红）画刷；正常 → TextBox 默认边框画刷。
+/// 画刷均取自应用主题资源，深浅色模式下自动适配，禁止硬编码色值。
+/// 主题切换在本应用需重启生效，因此无需响应运行时主题变化。
+/// </summary>
+public sealed class BoolToErrorBorderBrush : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var resources = Application.Current.Resources;
+        if (value is true)
+        {
+            return resources.TryGetValue("SystemFillColorCriticalBrush", out var critical)
+                ? critical
+                : new SolidColorBrush(Colors.Red);
+        }
+
+        return resources.TryGetValue("TextControlBorderBrush", out var normal)
+            ? normal
+            : DependencyProperty.UnsetValue; // 取消设置，回退 TextBox 模板默认边框
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
 /// 将字符串映射为可见性（空/null→Collapsed，非空→Visible）。
 /// 用于「有状态消息时才显示」的场景。
 /// </summary>

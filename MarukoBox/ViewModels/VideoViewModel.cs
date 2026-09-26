@@ -378,7 +378,11 @@ public partial class VideoViewModel : ObservableObject
         Settings.FrameCount = s.Settings.FrameCount;
         Settings.Width = s.Settings.Width;
         Settings.Height = s.Settings.Height;
-        Settings.GpuDevice = s.Settings.GpuDevice;
+
+        // 【N5 修复】必须写可观察属性 GpuDevice（经 OnGpuDeviceChanged 回写 Settings），
+        // 而不是直接写 Settings.GpuDevice——后者 UI 绑定的 GpuDevice 不会更新，
+        // 表现为「界面显示 config 值、实际编码用 session 值」，且用户不改该框就永不纠正。
+        GpuDevice = s.Settings.GpuDevice;
 
         KeepOriginalResolution = s.Settings.KeepOriginalResolution;
         OutputDir = s.OutputDir;
@@ -622,6 +626,10 @@ public partial class VideoViewModel : ObservableObject
 
         try
         {
+            // 【N3 修复】本批次已分配的输出路径集：同名源（或同一源入队两次）在
+            // 「原名」规则下会生成相同输出路径，必须追号防互覆。
+            var assignedOutputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var item in Queue.ToList())
             {
                 if (_cts.IsCancellationRequested)
@@ -636,7 +644,7 @@ public partial class VideoViewModel : ObservableObject
                 item.Percent = 0;
 
                 Settings.InputPath = item.InputPath;
-                Settings.OutputPath = ComputeOutputPath(item.InputPath);
+                Settings.OutputPath = OutputNaming.DedupeBatch(ComputeOutputPath(item.InputPath), assignedOutputs);
 
                 // 注意：ffmpeg 的进度回调来自后台线程（stderr 读取线程 / stdoutTask 线程池线程）。
                 // 必须经由 App.RunOnUiThread 封送回 UI 线程，否则跨线程更新可视化树会触发
@@ -753,7 +761,10 @@ public partial class VideoViewModel : ObservableObject
             case "exit":
                 StatusText = "编码完成，正在退出程序…";
                 await Task.Delay(600);
-                App.Current.Exit();
+                // 【N7 修复】Exit() 在 unpackaged 下可能不关窗、不触发 Window.Closed（会话不保存）、
+                // 甚至不终止进程（官方文档对该场景无任何保证）。统一走显式 Shutdown：
+                // 保存会话 → 关窗 → 兜底终止进程。
+                App.Shutdown();
                 return;
 
             case "shutdown":

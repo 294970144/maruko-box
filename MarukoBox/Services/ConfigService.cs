@@ -204,9 +204,12 @@ public sealed class ConfigService : IConfigService
             var json = JsonSerializer.Serialize(config, JsonOptions);
             File.WriteAllText(ConfigPath, json);
         }
-        catch
+        catch (Exception ex)
         {
-            // 写入失败（如权限问题）时静默忽略，不影响主流程。
+            // 【C7 修复】写入失败（如权限问题、磁盘满）不能完全无感——
+            // 配置没存上，用户下次启动会面对"改了又弹回"的困惑。至少留下日志痕迹。
+            // 不抛出：保存失败不应阻塞主流程（与既有约定一致）。
+            App.LogCrash(ex, "ConfigService.Save");
         }
     }
 

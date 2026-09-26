@@ -75,10 +75,20 @@
                         <SymbolIcon Symbol="Crop" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+
+                <!-- 功能菜单 / 系统菜单 分组分隔（结构化认知：上方为功能入口，下方为系统入口） -->
+                <NavigationViewItemSeparator />
+
                 <NavigationViewItem Content="设置" Tag="Settings">
                     <NavigationViewItem.Icon>
                         <SymbolIcon Symbol="Setting" />
                     </NavigationViewItem.Icon>
+                    <!-- 重启提醒：主题 / 用户级别改后选了「稍后重启」时点亮 -->
+                    <NavigationViewItem.InfoBadge>
+                        <InfoBadge x:Name="RestartPendingBadge"
+                                   Style="{ThemeResource AttentionDotInfoBadgeStyle}"
+                                   Visibility="Collapsed" />
+                    </NavigationViewItem.InfoBadge>
                 </NavigationViewItem>
                 <NavigationViewItem Content="关于" Tag="About">
                     <NavigationViewItem.Icon>

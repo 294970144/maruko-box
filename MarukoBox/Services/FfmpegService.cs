@@ -259,7 +259,10 @@ public class FfmpegService : IFfmpegService
         }
 
         // GPU 路径且支持 scale_cuda → 全 GPU 缩放（interp_algo=4 即 lanczos）
-        if (resolved.IsGpuEncoder() && gpuInfo.HasCudaScale)
+        // 【N9 修复】scale_cuda 只接受 GPU 帧：若解码侧未走 hwaccel（HasCudaDecode=false），
+        // 系统内存帧喂给 scale_cuda 会直接报错。检测组合"有一无一"虽属边角，
+        // 但条件写全不花任何成本，且让 scale_cuda 与 hwaccel 解码能力显式耦合。
+        if (resolved.IsGpuEncoder() && gpuInfo.HasCudaDecode && gpuInfo.HasCudaScale)
         {
             return $"scale_cuda={w}:{h}:interp_algo=4";
         }
@@ -481,7 +484,8 @@ public class FfmpegService : IFfmpegService
         string arguments,
         string currentFile,
         IProgress<EncodeProgress> progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        TimeSpan? totalOverride = null)
     {
         // 守卫：ffmpeg 路径缺失会令 process.Start() 抛 Win32Exception，提前给出明确信息。
         if (string.IsNullOrWhiteSpace(ffmpegPath))
@@ -598,10 +602,13 @@ public class FfmpegService : IFfmpegService
                         continue;
                     }
 
+                    // 【N4 修复】分母取值：裁剪路径用调用方给定的区间时长（out_time 从 0 起算，
+                    // 全片 Duration 会把进度压到最多 区间/全片 比例）；其余路径仍用 stderr 解析值。
+                    var total = totalOverride ?? new TimeSpan(Volatile.Read(ref durationTicks));
                     ParseProgressLine(
                         line,
                         current,
-                        new TimeSpan(Volatile.Read(ref durationTicks)),
+                        total,
                         wallClock.Elapsed);
                     progress.Report(current);
                 }
@@ -1317,11 +1324,13 @@ public class FfmpegService : IFfmpegService
             var enc = request.Encoder == EncoderType.Auto ? gpuInfo.RecommendedEncoder : request.Encoder;
             var quality = Math.Clamp(request.Quality, 0, 51);
 
-            // NVENC 用 -cq（配合默认 VBR），CPU 编码器用 -crf；
+            // NVENC 用 -cq：只在 VBR 模式下生效。【N10 修复】显式 -rc vbr -b:v 0，
+            // 不再依赖 ffmpeg 默认 rc 行为——跨版本默认值可能漂移成 constqp 或按默认
+            // -b:v 走，导致质量参数静默失效。CPU 编码器用 -crf；
             // AMF / QSV 的量化参数命名各家不一致，这里只用它们的预设档位，避免参数不被识别。
             var qualityArgs = enc switch
             {
-                EncoderType.NvencHevc or EncoderType.NvencH264 => $"-preset p5 -cq {quality}",
+                EncoderType.NvencHevc or EncoderType.NvencH264 => $"-preset p5 -rc vbr -cq {quality} -b:v 0",
                 EncoderType.AmfHevc or EncoderType.QsvHevc => "-quality balanced",
                 _ => $"-preset medium -crf {quality}"
             };

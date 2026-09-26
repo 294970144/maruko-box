@@ -5,7 +5,7 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>MarukoBox</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.7.4</Version>
+    <Version>1.8.0</Version>
     <AssemblyTitle>MarukoBox 2026</AssemblyTitle>
     <Product>MarukoBox 2026</Product>
     <!-- 让 exe 在资源管理器/任务栏(未运行时)显示图标：嵌入 RT_GROUP_ICON 到 PE -->
@@ -57,7 +57,10 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.6.1" />
+    <!-- 【D1 修复】移除 Microsoft.Windows.SDK.BuildTools.WinApp：
+         它只服务于「packaged 应用的 dotnet run 调试注册」（winapp CLI / AUMID 身份），
+         本应用已全面走 unpackaged（WindowsPackageType=None），启动调试用 F5/直启 exe，
+         该包在 build / publish / run 三场景均无参与，属无用依赖。 -->
   </ItemGroup>
 
   <!--

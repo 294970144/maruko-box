@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using MarukoBox.Helpers;
 using MarukoBox.Models;
 using MarukoBox.Services;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
 
@@ -102,7 +103,38 @@ public partial class SettingsViewModel : ObservableObject
     public partial EncoderOption? SelectedEncoderOption { get; set; }
 
     [ObservableProperty]
-    public partial string StatusMessage { get; set; } = "未检测";
+    public partial string StatusMessage { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 「未保存」状态：任意被追踪的设置属性与上次保存基线不一致时为 true，
+    /// 驱动悬浮保存按钮上的红点提示。基线在构造完成与每次保存成功后重新拍摄。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsDirty { get; set; }
+
+    /// <summary>是否允许编辑自定义 ffmpeg 路径 = 无内置 ffmpeg。有内置时输入框置灰禁用。</summary>
+    [ObservableProperty]
+    public partial bool CanEditFfmpegPath { get; set; } = true;
+
+    /// <summary>ffmpeg 路径校验错误文案（防抖后的 File.Exists 轻校验；空串 = 无错误）。</summary>
+    [ObservableProperty]
+    public partial string FfmpegPathError { get; set; } = string.Empty;
+
+    /// <summary>ffmpeg 路径是否校验失败（驱动输入框红色边框）。</summary>
+    [ObservableProperty]
+    public partial bool IsFfmpegPathInvalid { get; set; }
+
+    /// <summary>多 GPU 设备序号的动态上限 = 检测到的设备数 - 1；nvidia-smi 不可用时回退 3。</summary>
+    [ObservableProperty]
+    public partial int GpuDeviceMax { get; set; } = 3;
+
+    /// <summary>默认输出目录是否非空（控制「打开」按钮可用性）。</summary>
+    [ObservableProperty]
+    public partial bool HasOutputDirectory { get; set; }
+
+    /// <summary>悬浮保存按钮文字；保存成功后短暂显示「已保存 ✓」作为就近反馈。</summary>
+    [ObservableProperty]
+    public partial string SaveButtonText { get; set; } = "保存配置";
 
     /// <summary>检查更新卡片的副标题：当前软件版本。</summary>
     [ObservableProperty]
@@ -135,6 +167,14 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string UpdateStatusMessage { get; set; } = string.Empty;
+
+    /// <summary>更新/依赖检查结果是否可见（驱动结果 InfoBar 的 IsOpen）。</summary>
+    [ObservableProperty]
+    public partial bool HasUpdateStatus { get; set; }
+
+    /// <summary>更新/依赖检查结果的严重级别（四级状态体系：成功/警告/错误/信息）。</summary>
+    [ObservableProperty]
+    public partial InfoBarSeverity UpdateStatusSeverity { get; set; } = InfoBarSeverity.Informational;
 
     /// <summary>用户级别下拉的当前选中项（中文显示名）。</summary>
     [ObservableProperty]
@@ -187,11 +227,67 @@ public partial class SettingsViewModel : ObservableObject
         // 【B3 修复】让「手动路径被内置覆盖」这件事在 UI 上可见，
         // 而不是让用户填了半天发现不生效。
         HasBundledFfmpeg = ConfigService.HasBundledFfmpeg;
+        CanEditFfmpegPath = !HasBundledFfmpeg;
         FfmpegPathHint = HasBundledFfmpeg
-            ? $"当前使用内置 ffmpeg {BundledVersionText}，此处填写的路径仅在内置 ffmpeg 不存在时才会生效。"
-            : "留空则自动探测（内置 → PATH）。";
+            ? $"当前使用内置 ffmpeg {BundledVersionText}，下方路径已禁用；仅当内置 ffmpeg 不存在时才会使用手动路径。"
+            : "留空则自动探测（内置 → PATH）；填写后仅在内置 ffmpeg 不存在时生效。";
+
+        // 输出目录非空 → 「打开」按钮可用（置灰语义：空目录时打开数据目录会让人困惑）。
+        HasOutputDirectory = !string.IsNullOrWhiteSpace(OutputDirectory);
+
+        // 脏状态追踪：订阅自身属性变更，与基线快照比对驱动「未保存」红点。
+        // 基线必须在构造（含所有绑定初始化）完成后拍摄——绑定初期会触发一串
+        // PropertyChanged，若先订阅后初始化会把原值覆写误判成「已修改」。
+        PropertyChanged += OnSelfPropertyChanged;
+        _baseline = CaptureSnapshot();
 
         _ = DetectAsync();
+    }
+
+    // ---------- 脏状态追踪（未保存红点） ----------
+
+    /// <summary>保存基线快照：与当前值不一致即为「有未保存修改」。</summary>
+    private SettingSnapshot _baseline;
+
+    /// <summary>ffmpeg 路径校验的防抖令牌：击键级轻校验不应连环触发。</summary>
+    private CancellationTokenSource? _pathValidateCts;
+
+    /// <summary>
+    /// 全量设置快照（值类型/字符串，record 相等性比较）。
+    /// 注意编码器以 Type 代码参与比较——EncoderOption 是引用类型，直接比较会恒等。
+    /// </summary>
+    private sealed record SettingSnapshot(
+        string FfmpegPath,
+        string OutputDirectory,
+        string Theme,
+        int GpuDevice,
+        string EncoderCode,
+        string UserLevelDisplay,
+        bool RememberLastSession,
+        string OutputRule,
+        string UpdateSourceDisplay);
+
+    private SettingSnapshot CaptureSnapshot() => new(
+        FfmpegPath,
+        OutputDirectory,
+        Theme,
+        GpuDevice,
+        SelectedEncoderOption?.Type.ToString() ?? string.Empty,
+        SelectedUserLevel,
+        RememberLastSession,
+        SelectedOutputFileNameRule,
+        SelectedUpdateSource);
+
+    /// <summary>被追踪的设置属性变更 → 重新计算 IsDirty。</summary>
+    private void OnSelfPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(FfmpegPath) or nameof(OutputDirectory) or nameof(Theme)
+            or nameof(GpuDevice) or nameof(SelectedEncoderOption) or nameof(SelectedUserLevel)
+            or nameof(RememberLastSession) or nameof(SelectedOutputFileNameRule)
+            or nameof(SelectedUpdateSource))
+        {
+            IsDirty = CaptureSnapshot() != _baseline;
+        }
     }
 
     /// <summary>内置 ffmpeg 版本的显示文案。</summary>
@@ -228,15 +324,15 @@ public partial class SettingsViewModel : ObservableObject
         }
 
         IsDetecting = true;
-        StatusMessage = "检测中…";
+        // 检测状态统一由顶部横幅承载（Summary + DetectionSeverity）；
+        // 底部 StatusMessage 只保留错误通道，避免成功态文案与横幅重复。
+        StatusMessage = string.Empty;
         try
         {
             var info = await _gpu.DetectAsync(FfmpegPath);
             GpuInfo = info;
             BundledVersionText = GetBundledDisplayText();
-            StatusMessage = info.DetectionSucceeded
-                ? (info.HasAnyGpuEncoder ? "检测完成，GPU 编码器可用" : "检测完成，将使用 CPU 编码")
-                : $"检测失败：{info.ErrorMessage}";
+            StatusMessage = info.DetectionSucceeded ? string.Empty : $"检测失败：{info.ErrorMessage}";
         }
         catch (Exception ex)
         {
@@ -295,6 +391,53 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 弹出当前 GPU 设备列表与对应序号（多 GPU 序号设置的引导）。
+    /// 列表来自 nvidia-smi 枚举（<see cref="GpuInfo.GpuDevices"/>）；
+    /// 无 NVIDIA 设备时明确告知该序号仅对 NVENC 生效。
+    /// </summary>
+    [RelayCommand]
+    private void ShowGpuDevices()
+    {
+        var panel = new StackPanel { Spacing = 8 };
+
+        var devices = GpuInfo.GpuDevices;
+        if (devices.Count == 0)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = "未检测到 NVIDIA 设备。「多 GPU 设备序号」仅对 NVIDIA NVENC 编码生效，AMD / Intel 显卡无需设置。",
+                TextWrapping = TextWrapping.Wrap
+            });
+        }
+        else
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"检测到 {devices.Count} 台 NVIDIA 设备，编码时使用的设备序号如下（0 = 自动/第一张）：",
+                TextWrapping = TextWrapping.Wrap
+            });
+            foreach (var device in devices)
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = $"{device.Index}：{device.Name}",
+                    IsTextSelectionEnabled = true
+                });
+            }
+        }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = App.Window.Content.XamlRoot,
+            Title = "GPU 设备列表",
+            Content = panel,
+            CloseButtonText = "关闭",
+            DefaultButton = ContentDialogButton.Close
+        };
+        _ = dialog.ShowAsync();
+    }
+
+    /// <summary>
     /// 保存配置到磁盘。若本次保存涉及「主题」或「用户级别」与上次保存时不同，
     /// 则弹"立即重启？"对话框，主按钮触发 <see cref="RestartApp"/>。
     /// </summary>
@@ -313,26 +456,44 @@ public partial class SettingsViewModel : ObservableObject
             OutputFileNameRule = SelectedOutputFileNameRule,
             GpuDevice = GpuDevice,
             UserLevel = UserLevels.DisplayToCode(SelectedUserLevel),
-                RememberLastSession = RememberLastSession,
-                UpdateSource = UpdateSourceDisplayToCode(SelectedUpdateSource)
-            };
+            RememberLastSession = RememberLastSession,
+            UpdateSource = UpdateSourceDisplayToCode(SelectedUpdateSource)
+        };
         _config.Save(config);
 
         if (themeChanged || levelChanged)
         {
-            StatusMessage = "配置已保存（主题 / 用户级别需重启应用后生效）";
+            StatusMessage = string.Empty;
             if (await PromptRestartAsync())
             {
                 RestartApp();
                 return;
             }
-            // 用户选择稍后：刷新 baseline，下次 Save 同样值时不再提示。
+
+            // 用户选择稍后：刷新 baseline，下次 Save 同样值时不再提示；
+            // 同时在「设置」导航项挂 InfoBadge，提醒重启后生效。
             _savedThemeBeforeSave = Theme;
             _savedUserLevelBeforeSave = SelectedUserLevel;
+            (App.Window as MainWindow)?.SetRestartPending(true);
         }
         else
         {
-            StatusMessage = "配置已保存";
+            StatusMessage = string.Empty;
+            // 主题 / 用户级别恢复原值（或本来就没改）：重启提醒不再需要。
+            (App.Window as MainWindow)?.SetRestartPending(false);
+        }
+
+        // 保存成功：重拍基线（红点熄灭）+ 按钮就近反馈。
+        _baseline = CaptureSnapshot();
+        IsDirty = false;
+        SaveButtonText = "已保存 ✓";
+        try
+        {
+            await Task.Delay(1800);
+        }
+        finally
+        {
+            SaveButtonText = "保存配置";
         }
     }
 
@@ -379,9 +540,11 @@ public partial class SettingsViewModel : ObservableObject
         }
         catch
         {
-            // 重启启动失败时，仍走 Exit 让用户自己手动重启
+            // 重启启动失败时，仍走 Shutdown 让用户自己手动重启
         }
-        App.Current.Exit();
+        // 【N7 修复】Exit() 在 unpackaged 下行为未定义，统一走显式 Shutdown
+        // （保存会话 → 关窗 → 兜底终止进程；新进程已先启动，二者短暂并存无碍）。
+        App.Shutdown();
     }
 
     // ---------- 输出命名规则 ----------
@@ -390,6 +553,141 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnSelectedOutputFileNameRuleChanged(string value)
     {
         OutputFileNamePreview = OutputNaming.Preview(value);
+    }
+
+    /// <summary>输出目录变化时同步「打开」按钮可用性。</summary>
+    partial void OnOutputDirectoryChanged(string value)
+    {
+        HasOutputDirectory = !string.IsNullOrWhiteSpace(value);
+    }
+
+    /// <summary>
+    /// 检测结果更新后：按实际设备数收紧多 GPU 序号上限（nvidia-smi 缺失时回退 3），
+    /// 并把越界的当前值钳回合法范围。
+    /// </summary>
+    partial void OnGpuInfoChanged(GpuInfo value)
+    {
+        GpuDeviceMax = value.GpuDeviceCount > 0 ? value.GpuDeviceCount - 1 : 3;
+        if (GpuDevice > GpuDeviceMax)
+        {
+            GpuDevice = GpuDeviceMax;
+        }
+    }
+
+    /// <summary>
+    /// ffmpeg 路径击键级校验（400ms 防抖）：只做 File.Exists 轻校验。
+    /// 绝不能在此触发 DetectAsync——一次完整检测要并发起 5 个外部进程，
+    /// 且检测缓存按路径失效，击键级触发会造成进程风暴。
+    /// 版本兼容性校验交给「重新检测」按钮。
+    /// </summary>
+    partial void OnFfmpegPathChanged(string value)
+    {
+        // 输入框禁用（有内置 ffmpeg）时不校验：禁用态本身就是状态。
+        if (!CanEditFfmpegPath)
+        {
+            ClearFfmpegPathError();
+            return;
+        }
+
+        _pathValidateCts?.Cancel();
+        _pathValidateCts?.Dispose();
+        _pathValidateCts = new CancellationTokenSource();
+        var cts = _pathValidateCts;
+
+        _ = ValidateFfmpegPathAsync(value, cts);
+    }
+
+    private async Task ValidateFfmpegPathAsync(string path, CancellationTokenSource cts)
+    {
+        try
+        {
+            await Task.Delay(400, cts.Token);
+            if (cts.Token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            // 延迟执行时重查：构造期间 CanEditFfmpegPath 尚未最终确定（内置检测在后），
+            // 若此时已有内置 ffmpeg，输入框应处于禁用态，无需任何校验提示。
+            if (!CanEditFfmpegPath)
+            {
+                ClearFfmpegPathError();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                // 留空 = 自动探测，不是错误
+                ClearFfmpegPathError();
+                return;
+            }
+
+            if (File.Exists(path))
+            {
+                ClearFfmpegPathError();
+            }
+            else
+            {
+                FfmpegPathError = $"未找到 ffmpeg.exe：{path}。保存后仍会回退到内置版本或 PATH。";
+                IsFfmpegPathInvalid = true;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 新输入到来，本次校验作废
+        }
+    }
+
+    private void ClearFfmpegPathError()
+    {
+        FfmpegPathError = string.Empty;
+        IsFfmpegPathInvalid = false;
+    }
+
+    /// <summary>
+    /// 内置 ffmpeg 状态变化（安装/更新后）时刷新路径编辑可用性、说明文案与校验状态。
+    /// </summary>
+    private void RefreshFfmpegBundledState()
+    {
+        HasBundledFfmpeg = ConfigService.HasBundledFfmpeg;
+        CanEditFfmpegPath = !HasBundledFfmpeg;
+        FfmpegPathHint = HasBundledFfmpeg
+            ? $"当前使用内置 ffmpeg {BundledVersionText}，下方路径已禁用；仅当内置 ffmpeg 不存在时才会使用手动路径。"
+            : "留空则自动探测（内置 → PATH）；填写后仅在内置 ffmpeg 不存在时生效。";
+        ClearFfmpegPathError();
+    }
+
+    // ---------- 更新/依赖检查状态（四级状态体系） ----------
+
+    /// <summary>
+    /// 统一设置更新/依赖检查结果：文案 + 严重级别 + 可见性。
+    /// severity 缺省时按内容推断：含 ✗ → Error；含 △ → Warning；含 ✓ → Success；否则 Informational。
+    /// </summary>
+    private void SetUpdateStatus(string text, InfoBarSeverity? severity = null)
+    {
+        UpdateStatusMessage = text;
+        HasUpdateStatus = !string.IsNullOrEmpty(text);
+        UpdateStatusSeverity = severity ?? InferUpdateSeverity(text);
+    }
+
+    private static InfoBarSeverity InferUpdateSeverity(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return InfoBarSeverity.Informational;
+        }
+
+        if (text.Contains('✗'))
+        {
+            return InfoBarSeverity.Error;
+        }
+
+        if (text.Contains('△'))
+        {
+            return InfoBarSeverity.Warning;
+        }
+
+        return text.Contains('✓') ? InfoBarSeverity.Success : InfoBarSeverity.Informational;
     }
 
     // ---------- 更新源显示名 <-> 配置代码 ----------
@@ -428,7 +726,7 @@ public partial class SettingsViewModel : ObservableObject
         IsCheckingUpdate = true;
         IsDownloading = false;
         UpdateProgressPercent = 0;
-        UpdateStatusMessage = "正在检查软件更新…";
+        SetUpdateStatus("正在检查软件更新…", InfoBarSeverity.Informational);
         try
         {
             var source = SelectedUpdateSource == "CN" ? UpdateSource.CN : UpdateSource.GitHub;
@@ -438,14 +736,14 @@ public partial class SettingsViewModel : ObservableObject
             // 版本级比较（容忍 v 前缀差异），而非字符串相等
             if (UpdateService.CompareVersions(current, latest.Version) >= 0)
             {
-                UpdateStatusMessage = $"已是最新版本（{current}）";
+                SetUpdateStatus($"已是最新版本（{current}）", InfoBarSeverity.Success);
                 return;
             }
 
             var confirmed = await ConfirmAppUpdateAsync(current, latest.Tag);
             if (!confirmed)
             {
-                UpdateStatusMessage = "已取消更新";
+                SetUpdateStatus("已取消更新", InfoBarSeverity.Informational);
                 return;
             }
 
@@ -453,13 +751,22 @@ public partial class SettingsViewModel : ObservableObject
             var progress = new Progress<double>(p => App.RunOnUiThread(() =>
             {
                 UpdateProgressPercent = Math.Round(p, 1);
-                UpdateStatusMessage = $"正在下载 {latest.Tag} 安装包… {p:F0}%";
+                SetUpdateStatus($"正在下载 {latest.Tag} 安装包… {p:F0}%", InfoBarSeverity.Informational);
             }));
 
             var installer = await _update.DownloadAppInstallerAsync(
                 latest.DownloadUrl, latest.Version, progress);
 
-            UpdateStatusMessage = $"安装包已就绪，正在启动安装程序（{latest.Tag}）…";
+            // 【N8】安装包来源未提供 .sha256 时显式告知（CN 源常态），状态升为警告级
+            if (_update.LastChecksumMissing)
+            {
+                SetUpdateStatus($"安装包已就绪（注意：此来源未提供校验文件，已跳过 SHA-256 校验），正在启动安装程序（{latest.Tag}）…",
+                    InfoBarSeverity.Warning);
+            }
+            else
+            {
+                SetUpdateStatus($"安装包已就绪，正在启动安装程序（{latest.Tag}）…", InfoBarSeverity.Informational);
+            }
             await Task.Delay(600); // 让用户看到状态再退出
 
             Process.Start(new ProcessStartInfo
@@ -467,11 +774,13 @@ public partial class SettingsViewModel : ObservableObject
                 FileName = installer,
                 UseShellExecute = true
             });
-            App.Current.Exit();
+            // 【N7 修复】Exit() 在 unpackaged 下行为未定义（可能不关窗、不触发 Closed，
+            // 新安装器与旧进程并存导致文件占用）。统一走显式 Shutdown。
+            App.Shutdown();
         }
         catch (Exception ex)
         {
-            UpdateStatusMessage = $"检查更新失败：{ex.Message}";
+            SetUpdateStatus($"检查更新失败：{ex.Message}", InfoBarSeverity.Error);
         }
         finally
         {
@@ -525,7 +834,7 @@ public partial class SettingsViewModel : ObservableObject
         }
 
         IsCheckingUpdate = true;
-        UpdateStatusMessage = "正在检查依赖…";
+        SetUpdateStatus("正在检查依赖…", InfoBarSeverity.Informational);
         var sb = new StringBuilder();
 
         try
@@ -576,7 +885,7 @@ public partial class SettingsViewModel : ObservableObject
                 else if (string.IsNullOrEmpty(local)
                          || UpdateService.CompareVersions(local, rec.RecommendedTag!) < 0)
                 {
-                    UpdateStatusMessage = sb.ToString().TrimEnd();
+                    SetUpdateStatus(sb.ToString().TrimEnd());
                     var confirmed = await ConfirmFfmpegUpdateAsync(local, rec.RecommendedTag!, rec.RecommendedSizeBytes);
                     if (confirmed)
                     {
@@ -584,7 +893,7 @@ public partial class SettingsViewModel : ObservableObject
                     }
                     else
                     {
-                        UpdateStatusMessage = sb.ToString().TrimEnd() + "\n已取消更新内置 ffmpeg";
+                        SetUpdateStatus(sb.ToString().TrimEnd() + "\n已取消更新内置 ffmpeg");
                     }
                     return;
                 }
@@ -601,11 +910,11 @@ public partial class SettingsViewModel : ObservableObject
                 sb.AppendLine($"△ 检查 ffmpeg 新版失败：{ex.Message}");
             }
 
-            UpdateStatusMessage = sb.ToString().TrimEnd();
+            SetUpdateStatus(sb.ToString().TrimEnd());
         }
         catch (Exception ex)
         {
-            UpdateStatusMessage = $"依赖检查失败：{ex.Message}";
+            SetUpdateStatus($"依赖检查失败：{ex.Message}", InfoBarSeverity.Error);
         }
         finally
         {
@@ -620,13 +929,18 @@ public partial class SettingsViewModel : ObservableObject
     {
         try
         {
+            // 【E5 修复】大小不再硬编码"约 67 MB"——用调用方传入的实际字节数格式化；
+            // 镜像源（兰州索引页无大小字段，记 0）显示「大小未知」。
+            var sizePart = sizeBytes is > 0
+                ? $"约 {sizeBytes.Value / 1024d / 1024d:F0} MB"
+                : "大小未知";
             var dialog = new ContentDialog
             {
                 XamlRoot = App.Window.Content.XamlRoot,
                 Title = "发现新版本",
                 Content = $"当前内置 ffmpeg：{(string.IsNullOrEmpty(localVersion) ? "未安装" : localVersion)}\n" +
                           $"最新版本：{newVersion}\n\n" +
-                          "是否下载并安装？（约 67 MB，安装期间请勿进行编码任务）",
+                          $"是否下载并安装？（{sizePart}，安装期间请勿进行编码任务）",
                 PrimaryButtonText = "下载并安装",
                 CloseButtonText = "取消",
                 DefaultButton = ContentDialogButton.Primary
@@ -650,7 +964,7 @@ public partial class SettingsViewModel : ObservableObject
         var progress = new Progress<double>(p => App.RunOnUiThread(() =>
         {
             UpdateProgressPercent = Math.Round(p, 1);
-            UpdateStatusMessage = $"正在下载 ffmpeg {target.Tag}… {p:F0}%";
+            SetUpdateStatus($"正在下载 ffmpeg {target.Tag}… {p:F0}%", InfoBarSeverity.Informational);
         }));
 
         await _update.DownloadAndInstallAsync(target.DownloadUrl, target.Tag, progress);
@@ -658,7 +972,18 @@ public partial class SettingsViewModel : ObservableObject
         // 内置版本已替换：重新解析生效路径（内置优先）并刷新能力检测
         FfmpegPath = _config.Load().FfmpegPath;
         BundledVersionText = target.Tag;
-        UpdateStatusMessage = $"内置 ffmpeg 已更新到 {target.Tag}";
+        RefreshFfmpegBundledState();
+
+        // 【N8】CN 镜像等来源可能没有 .sha256 伴随文件——校验被跳过时必须让用户知道
+        if (_update.LastChecksumMissing)
+        {
+            SetUpdateStatus($"内置 ffmpeg 已更新到 {target.Tag}（注意：此来源未提供校验文件，已跳过 SHA-256 校验）",
+                InfoBarSeverity.Warning);
+        }
+        else
+        {
+            SetUpdateStatus($"内置 ffmpeg 已更新到 {target.Tag}", InfoBarSeverity.Success);
+        }
 
         await DetectAsync();
     }
@@ -716,12 +1041,23 @@ public partial class SettingsViewModel : ObservableObject
 
             FfmpegPath = _config.Load().FfmpegPath;
             BundledVersionText = row.Tag;
-            UpdateStatusMessage = $"已安装 ffmpeg {row.Tag}（专家模式，跳过驱动兼容检查）";
+            RefreshFfmpegBundledState();
+
+            // 【N8】同上：校验缺失时用警告级状态显式告知
+            if (_update.LastChecksumMissing)
+            {
+                SetUpdateStatus($"已安装 ffmpeg {row.Tag}（专家模式，跳过驱动兼容检查；注意：此来源未提供校验文件，已跳过 SHA-256 校验）",
+                    InfoBarSeverity.Warning);
+            }
+            else
+            {
+                SetUpdateStatus($"已安装 ffmpeg {row.Tag}（专家模式，跳过驱动兼容检查）", InfoBarSeverity.Success);
+            }
             await DetectAsync();
         }
         catch (Exception ex)
         {
-            UpdateStatusMessage = $"安装 {row.Tag} 失败：{ex.Message}";
+            SetUpdateStatus($"安装 {row.Tag} 失败：{ex.Message}", InfoBarSeverity.Error);
         }
         finally
         {
@@ -739,9 +1075,9 @@ public partial class SettingsViewModel : ObservableObject
                 XamlRoot = App.Window.Content.XamlRoot,
                 Title = "安装此版本",
                 Content = row.IsCompatible
-                    ? $"将下载并安装 jellyfin-ffmpeg {row.Tag}（约 67 MB）。\n\n" +
+                    ? $"将下载并安装 jellyfin-ffmpeg {row.Tag}（{row.SizeText}）。\n\n" +
                       "安装期间请勿进行编码任务。"
-                    : $"将下载并安装 jellyfin-ffmpeg {row.Tag}（约 67 MB）。\n\n" +
+                    : $"将下载并安装 jellyfin-ffmpeg {row.Tag}（{row.SizeText}）。\n\n" +
                       $"⚠ 本机当前 {row.CompatibleText}\n" +
                       "强制安装后 NVENC 硬件编码可能不可用，但软件编码器照常使用。\n\n" +
                       "是否继续？",

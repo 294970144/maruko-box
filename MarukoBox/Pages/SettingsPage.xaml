@@ -10,311 +10,355 @@
     mc:Ignorable="d" NavigationCacheMode="Required">
 
     <Page.Resources>
-        <conv:BoolToInfoBarSeverity x:Key="BoolToInfoBarSeverity" />
         <conv:BoolToGlyph x:Key="BoolToGlyph" />
         <conv:BoolToVisibility x:Key="BoolToVisibility" />
         <conv:InvertBool x:Key="InvertBool" />
         <conv:EmptyToCollapsed x:Key="EmptyToCollapsed" />
         <conv:UserLevelToVisibility x:Key="UserLevelToVisibility" />
+        <conv:BoolToErrorBorderBrush x:Key="BoolToErrorBorderBrush" />
+
+        <!-- 三大区块的统一分组标题（P1-2：全页面同一套分组逻辑） -->
+        <Style x:Key="SettingsGroupTitle" TargetType="TextBlock"
+               BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Opacity" Value="0.85" />
+            <Setter Property="Margin" Value="4,14,0,-2" />
+        </Style>
+
+        <!-- 卡片内子分组小标题（版本信息 / 编码能力支持） -->
+        <Style x:Key="CardSubgroupTitle" TargetType="TextBlock"
+               BasedOn="{StaticResource CaptionTextBlockStyle}">
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+        </Style>
+
+        <!-- 「重启后生效」警示徽章（P1-3：重启类选项的显著标识） -->
+        <Style x:Key="RestartBadge" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource SystemFillColorCautionBackgroundBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- 「即时生效」中性徽章（P1-4：与重启类选项形成明确视觉区分） -->
+        <Style x:Key="InstantBadge" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource SystemFillColorNeutralBackgroundBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
     </Page.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Spacing="16" Padding="32" MaxWidth="760">
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="12" Padding="32,24,32,96" MaxWidth="760">
 
-            <TextBlock Text="设置" Style="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock Text="设置" Style="{StaticResource TitleTextBlockStyle}" />
 
-            <!-- 检查更新 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
-                <StackPanel Spacing="10">
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
+                <!-- ═══════════ 分组一：系统与更新 ═══════════ -->
+                <TextBlock Text="系统与更新" Style="{StaticResource SettingsGroupTitle}" />
 
-                        <FontIcon Grid.Column="0" Glyph="&#xE777;" FontSize="24"
-                                  VerticalAlignment="Center" />
+                <!-- 检查更新 -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16">
+                    <StackPanel Spacing="10">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
 
-                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                            <TextBlock Text="检查更新" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <TextBlock Text="{x:Bind ViewModel.LocalVersionText, Mode=OneWay}"
-                                       Opacity="0.7" FontSize="12"
-                                       TextWrapping="Wrap" />
-                        </StackPanel>
+                            <FontIcon Grid.Column="0" Glyph="&#xE777;" FontSize="24"
+                                      VerticalAlignment="Center" />
 
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
-                                    VerticalAlignment="Center">
-                            <Button Content="检查更新" Style="{StaticResource AccentButtonStyle}"
-                                    Command="{x:Bind ViewModel.CheckUpdateCommand, Mode=OneWay}"
-                                    IsEnabled="{x:Bind ViewModel.IsCheckingUpdate, Mode=OneWay, Converter={StaticResource InvertBool}}" />
-                            <Button Content="检查依赖"
-                                    Command="{x:Bind ViewModel.CheckDependenciesCommand, Mode=OneWay}"
-                                    IsEnabled="{x:Bind ViewModel.IsCheckingUpdate, Mode=OneWay, Converter={StaticResource InvertBool}}" />
-                        </StackPanel>
-                    </Grid>
+                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="检查更新" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="{x:Bind ViewModel.LocalVersionText, Mode=OneWay}"
+                                           Opacity="0.7" FontSize="12"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
 
-                    <!-- 更新源切换（同时作用于软件更新与内置 ffmpeg 依赖更新） -->
-                    <StackPanel Spacing="6" Margin="0,4,0,0">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                                        VerticalAlignment="Center">
+                                <Button Content="检查更新" Style="{StaticResource AccentButtonStyle}"
+                                        Command="{x:Bind ViewModel.CheckUpdateCommand, Mode=OneWay}"
+                                        IsEnabled="{x:Bind ViewModel.IsCheckingUpdate, Mode=OneWay, Converter={StaticResource InvertBool}}" />
+                                <Button Content="检查依赖"
+                                        Command="{x:Bind ViewModel.CheckDependenciesCommand, Mode=OneWay}"
+                                        IsEnabled="{x:Bind ViewModel.IsCheckingUpdate, Mode=OneWay, Converter={StaticResource InvertBool}}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 更新源切换（长说明收纳进 ? 提示，P1-10） -->
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
                             <TextBlock Text="更新源" Opacity="0.8" VerticalAlignment="Center" />
                             <ComboBox ItemsSource="{x:Bind ViewModel.UpdateSourceOptions, Mode=OneWay}"
                                       SelectedItem="{x:Bind ViewModel.SelectedUpdateSource, Mode=TwoWay}"
-                                      MinWidth="160" />
+                                      MinWidth="140" />
+                            <FontIcon Glyph="&#xE946;" FontSize="12" VerticalAlignment="Center"
+                                      ToolTipService.ToolTip="同时决定「软件更新」与「内置 ffmpeg 依赖更新」的下载来源；CN 源任一端不可用时自动回退 GitHub。" />
                         </StackPanel>
-                        <TextBlock Text="同时决定「软件更新」与「内置 ffmpeg 依赖更新」的下载来源；CN 源任一端不可用时自动回退 GitHub。"
-                                   FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
+
+                        <!-- 下载进度（仅下载阶段可见） -->
+                        <ProgressBar Value="{x:Bind ViewModel.UpdateProgressPercent, Mode=OneWay}"
+                                     Maximum="100"
+                                     IsIndeterminate="{x:Bind ViewModel.IsDownloading, Mode=OneWay}"
+                                     Visibility="{x:Bind ViewModel.IsDownloading, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+
+                        <!-- 检查结果：按四级状态体系显示（成功绿 / 警告黄 / 错误红 / 信息蓝） -->
+                        <InfoBar IsClosable="False"
+                                 IsOpen="{x:Bind ViewModel.HasUpdateStatus, Mode=OneWay}"
+                                 Message="{x:Bind ViewModel.UpdateStatusMessage, Mode=OneWay}"
+                                 Severity="{x:Bind ViewModel.UpdateStatusSeverity, Mode=OneWay}" />
                     </StackPanel>
+                </Border>
 
-                    <!-- 下载进度（仅下载阶段可见） -->
-                    <ProgressBar Value="{x:Bind ViewModel.UpdateProgressPercent, Mode=OneWay}"
-                                 Maximum="100"
-                                 IsIndeterminate="{x:Bind ViewModel.IsDownloading, Mode=OneWay}"
-                                 Visibility="{x:Bind ViewModel.IsDownloading, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                <!-- 硬件检测横幅：只保留结论一行，详细参数见下方卡片（P0-1） -->
+                <InfoBar
+                    Title="GPU 与 ffmpeg 检测"
+                    Message="{x:Bind ViewModel.GpuInfo.Summary, Mode=OneWay}"
+                    Severity="{x:Bind ViewModel.GpuInfo.DetectionSeverity, Mode=OneWay}"
+                    IsOpen="True"
+                    IsClosable="False" />
 
-                    <TextBlock Text="{x:Bind ViewModel.UpdateStatusMessage, Mode=OneWay}"
-                               Opacity="0.8" FontSize="12"
-                               IsTextSelectionEnabled="True"
-                               TextWrapping="Wrap"
-                               Visibility="{x:Bind ViewModel.UpdateStatusMessage, Mode=OneWay, Converter={StaticResource EmptyToCollapsed}}" />
-                </StackPanel>
-            </Border>
+                <!-- 硬件能力：版本信息（纯文本）与编码能力支持（状态图标）语义彻底分离（P0-1） -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="硬件能力" Style="{StaticResource BodyStrongTextBlockStyle}" />
 
-            <!-- 硬件检测状态条 -->
-            <InfoBar
-                Title="GPU 与 ffmpeg 检测"
-                Message="{x:Bind ViewModel.GpuInfo.Summary, Mode=OneWay}"
-                Severity="{x:Bind ViewModel.GpuInfo.DetectionSucceeded, Mode=OneWay, Converter={StaticResource BoolToInfoBarSeverity}}"
-                IsOpen="True"
-                IsClosable="False" />
+                        <!-- 子分组：版本信息（纯文本展示，无状态图标，避免「版本号」被误读为功能开关） -->
+                        <TextBlock Text="版本信息" Style="{StaticResource CardSubgroupTitle}" />
+                        <Grid ColumnSpacing="12" RowSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
-            <!-- 6 项状态指示 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="硬件能力" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="ffmpeg 版本" Opacity="0.8" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind ViewModel.GpuInfo.FfmpegVersion, Mode=OneWay}" />
 
-                    <Grid ColumnSpacing="12" RowSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="显卡型号" Opacity="0.8" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.GpuInfo.GpuName, Mode=OneWay}" />
 
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="ffmpeg 版本" Opacity="0.8" />
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind ViewModel.GpuInfo.FfmpegVersion, Mode=OneWay}" />
-                        <FontIcon Grid.Row="0" Grid.Column="2" Glyph="{x:Bind ViewModel.GpuInfo.FfmpegFound, Mode=OneWay, Converter={StaticResource BoolToGlyph}}" />
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="驱动版本" Opacity="0.8" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.GpuInfo.DriverVersion, Mode=OneWay}" />
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="显卡型号" Opacity="0.8" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.GpuInfo.GpuName, Mode=OneWay}" />
-                        <FontIcon Grid.Row="1" Grid.Column="2" Glyph="{x:Bind ViewModel.GpuInfo.HasAnyGpuEncoder, Mode=OneWay, Converter={StaticResource BoolToGlyph}}" />
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="NVENC API" Opacity="0.8" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind ViewModel.GpuInfo.NvencApiVersion, Mode=OneWay}" />
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="驱动版本" Opacity="0.8" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.GpuInfo.DriverVersion, Mode=OneWay}" />
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="内置 ffmpeg" Opacity="0.8" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind ViewModel.BundledVersionText, Mode=OneWay}" />
+                        </Grid>
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="NVENC API" Opacity="0.8" />
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind ViewModel.GpuInfo.NvencApiVersion, Mode=OneWay}" />
+                        <!-- 子分组：编码能力支持（功能项配对勾 / 叉号，语义单一） -->
+                        <TextBlock Text="编码能力支持" Style="{StaticResource CardSubgroupTitle}" />
+                        <Grid ColumnSpacing="12" RowSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="scale_cuda" Opacity="0.8" />
-                        <TextBlock Grid.Row="4" Grid.Column="1" Text="全 GPU 缩放" />
-                        <FontIcon Grid.Row="4" Grid.Column="2" Glyph="{x:Bind ViewModel.GpuInfo.HasCudaScale, Mode=OneWay, Converter={StaticResource BoolToGlyph}}" />
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="NVENC HEVC" Opacity="0.8" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="NVIDIA 硬件编码 (HEVC)" />
+                            <FontIcon Grid.Row="0" Grid.Column="2" Glyph="{x:Bind ViewModel.GpuInfo.HasNvencHevc, Mode=OneWay, Converter={StaticResource BoolToGlyph}}" />
 
-                        <TextBlock Grid.Row="5" Grid.Column="0" Text="cuda 硬件解码" Opacity="0.8" />
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="-hwaccel cuda" />
-                        <FontIcon Grid.Row="5" Grid.Column="2" Glyph="{x:Bind ViewModel.GpuInfo.HasCudaDecode, Mode=OneWay, Converter={StaticResource BoolToGlyph}}" />
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="NVENC H.264" Opacity="0.8" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="NVIDIA 硬件编码 (H.264)" />
+                            <FontIcon Grid.Row="1" Grid.Column="2" Glyph="{x:Bind ViewModel.GpuInfo.HasNvencH264, Mode=OneWay, Converter={StaticResource BoolToGlyph}}" />
 
-                        <TextBlock Grid.Row="6" Grid.Column="0" Text="内置 ffmpeg" Opacity="0.8" />
-                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{x:Bind ViewModel.BundledVersionText, Mode=OneWay}" />
-                    </Grid>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="AMD AMF" Opacity="0.8" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="AMD 硬件编码 (HEVC)" />
+                            <FontIcon Grid.Row="2" Grid.Column="2" Glyph="{x:Bind ViewModel.GpuInfo.HasAmf, Mode=OneWay, Converter={StaticResource BoolToGlyph}}" />
 
-                    <Button Content="重新检测" Command="{x:Bind ViewModel.DetectCommand, Mode=OneWay}"
-                            IsEnabled="{x:Bind ViewModel.IsDetecting, Mode=OneWay, Converter={StaticResource InvertBool}}" />
-                    <ProgressRing IsActive="{x:Bind ViewModel.IsDetecting, Mode=OneWay}" Width="20" Height="20"
-                                  Visibility="{x:Bind ViewModel.IsDetecting, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
-                </StackPanel>
-            </Border>
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Intel QSV" Opacity="0.8" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="Intel 硬件编码 (HEVC)" />
+                            <FontIcon Grid.Row="3" Grid.Column="2" Glyph="{x:Bind ViewModel.GpuInfo.HasQsv, Mode=OneWay, Converter={StaticResource BoolToGlyph}}" />
 
-            <!-- ffmpeg 路径（高手及以上；默认级别直接使用内置 ffmpeg，无需配置） -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16"
-                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="ffmpeg.exe 路径" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBox Grid.Column="0" Text="{x:Bind ViewModel.FfmpegPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 PlaceholderText="留空 = 自动使用内置 ffmpeg" />
-                        <Button Grid.Column="1" Content="浏览…" Command="{x:Bind ViewModel.BrowseFfmpegCommand, Mode=OneWay}" />
-                    </Grid>
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="scale_cuda" Opacity="0.8" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="全 GPU 缩放" />
+                            <FontIcon Grid.Row="4" Grid.Column="2" Glyph="{x:Bind ViewModel.GpuInfo.HasCudaScale, Mode=OneWay, Converter={StaticResource BoolToGlyph}}" />
 
-                    <!-- 【B3 修复】内置 ffmpeg 存在时明确告知：手动路径不会生效 -->
-                    <InfoBar Severity="Informational"
-                             Message="{x:Bind ViewModel.FfmpegPathHint, Mode=OneWay}"
-                             IsOpen="True"
-                             Visibility="{x:Bind ViewModel.HasBundledFfmpeg, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
-                </StackPanel>
-            </Border>
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="cuda 硬件解码" Opacity="0.8" />
+                            <TextBlock Grid.Row="5" Grid.Column="1" Text="-hwaccel cuda" />
+                            <FontIcon Grid.Row="5" Grid.Column="2" Glyph="{x:Bind ViewModel.GpuInfo.HasCudaDecode, Mode=OneWay, Converter={StaticResource BoolToGlyph}}" />
+                        </Grid>
 
-            <!-- 编码默认参数 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="默认编码参数" Style="{StaticResource BodyStrongTextBlockStyle}" />
-
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="默认编码器" Opacity="0.8" />
-                        <ComboBox ItemsSource="{x:Bind ViewModel.EncoderOptions, Mode=OneWay}"
-                                  DisplayMemberPath="Name"
-                                  SelectedItem="{x:Bind ViewModel.SelectedEncoderOption, Mode=TwoWay}"
-                                  HorizontalAlignment="Stretch" />
+                        <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
+                            <Button Content="重新检测" Command="{x:Bind ViewModel.DetectCommand, Mode=OneWay}"
+                                    IsEnabled="{x:Bind ViewModel.IsDetecting, Mode=OneWay, Converter={StaticResource InvertBool}}" />
+                            <ProgressRing IsActive="{x:Bind ViewModel.IsDetecting, Mode=OneWay}" Width="20" Height="20"
+                                          VerticalAlignment="Center"
+                                          Visibility="{x:Bind ViewModel.IsDetecting, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
                     </StackPanel>
+                </Border>
 
-                    <StackPanel Spacing="6"
-                                Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
-                        <TextBlock Text="多 GPU 设备序号（0 = 自动；仅 NVIDIA NVENC 生效）" Opacity="0.8" />
-                        <NumberBox Value="{x:Bind ViewModel.GpuDevice, Mode=TwoWay}"
-                                   Minimum="0" Maximum="3" SmallChange="1" SpinButtonPlacementMode="Compact"
-                                   Width="160" HorizontalAlignment="Left" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
+                <!-- ═══════════ 分组二：编码核心配置 ═══════════ -->
+                <TextBlock Text="编码核心配置" Style="{StaticResource SettingsGroupTitle}" />
 
-            <!-- 主题（切换后重启生效） -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <FontIcon Grid.Column="0" Glyph="&#xE790;" FontSize="24"
-                              VerticalAlignment="Center" />
-
-                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="主题" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock Text="切换后需重启应用生效"
-                                   Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
-                    </StackPanel>
-
-                    <ComboBox Grid.Column="2" MinWidth="150" VerticalAlignment="Center"
-                              ItemsSource="{x:Bind ViewModel.ThemeOptions, Mode=OneWay}"
-                              SelectedItem="{x:Bind ViewModel.Theme, Mode=TwoWay}" />
-                </Grid>
-            </Border>
-
-            <!-- 保持习惯（即时生效，无需重启） -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <FontIcon Grid.Column="0" Glyph="&#xE81C;" FontSize="24"
-                              VerticalAlignment="Center" />
-
-                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="保持习惯" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock Text="记住视频页的编码设置，下次打开自动恢复；关闭后每回用默认参数。即时生效"
-                                   Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
-                    </StackPanel>
-
-                    <ToggleSwitch Grid.Column="2" VerticalAlignment="Center"
-                                  IsOn="{x:Bind ViewModel.RememberLastSession, Mode=TwoWay}" />
-                </Grid>
-            </Border>
-
-            <!-- 用户级别（切换后重启生效） -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <FontIcon Grid.Column="0" Glyph="&#xE716;" FontSize="24"
-                              VerticalAlignment="Center" />
-
-                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="用户级别" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock Text="控制界面显示的详细程度：普通只显示常用功能，高手显示进阶参数，程序员显示全部。重启生效"
-                                   Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
-                    </StackPanel>
-
-                    <ComboBox Grid.Column="2" MinWidth="150" VerticalAlignment="Center"
-                              ItemsSource="{x:Bind ViewModel.UserLevelOptions, Mode=OneWay}"
-                              SelectedItem="{x:Bind ViewModel.SelectedUserLevel, Mode=TwoWay}" />
-                </Grid>
-            </Border>
-
-            <!-- 界面与行为 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="界面与行为" Style="{StaticResource BodyStrongTextBlockStyle}" />
-
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="默认输出目录（留空则同目录）" Opacity="0.8" />
+                <!-- ffmpeg 路径（高级及以上；默认级别直接使用内置 ffmpeg，无需配置） -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16"
+                        Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="ffmpeg.exe 路径" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <Grid ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Text="{x:Bind ViewModel.FfmpegPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     PlaceholderText="留空 = 自动探测（内置 → PATH）"
+                                     IsEnabled="{x:Bind ViewModel.CanEditFfmpegPath, Mode=OneWay}"
+                                     BorderBrush="{x:Bind ViewModel.IsFfmpegPathInvalid, Mode=OneWay, Converter={StaticResource BoolToErrorBorderBrush}}" />
+                            <Button Grid.Column="1" Content="浏览…"
+                                    IsEnabled="{x:Bind ViewModel.CanEditFfmpegPath, Mode=OneWay}"
+                                    Command="{x:Bind ViewModel.BrowseFfmpegCommand, Mode=OneWay}" />
+                        </Grid>
+
+                        <!-- 生效规则常驻小字（P0-4：取代一次性可关闭提示条，随时可见） -->
+                        <TextBlock Text="{x:Bind ViewModel.FfmpegPathHint, Mode=OneWay}"
+                                   FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+
+                        <!-- 路径校验错误（防抖轻校验，红色提示） -->
+                        <TextBlock Text="{x:Bind ViewModel.FfmpegPathError, Mode=OneWay}"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                   TextWrapping="Wrap"
+                                   Visibility="{x:Bind ViewModel.FfmpegPathError, Mode=OneWay, Converter={StaticResource EmptyToCollapsed}}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 编码默认参数 -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="默认编码参数" Style="{StaticResource BodyStrongTextBlockStyle}" />
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="默认编码器" Opacity="0.8" />
+                            <ComboBox ItemsSource="{x:Bind ViewModel.EncoderOptions, Mode=OneWay}"
+                                      DisplayMemberPath="Name"
+                                      SelectedItem="{x:Bind ViewModel.SelectedEncoderOption, Mode=TwoWay}"
+                                      HorizontalAlignment="Stretch" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="6"
+                                    Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
+                            <TextBlock Text="多 GPU 设备序号（0 = 自动；仅 NVIDIA NVENC 生效）" Opacity="0.8" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <NumberBox Value="{x:Bind ViewModel.GpuDevice, Mode=TwoWay}"
+                                           Minimum="0"
+                                           Maximum="{x:Bind ViewModel.GpuDeviceMax, Mode=OneWay}"
+                                           SmallChange="1" SpinButtonPlacementMode="Compact"
+                                           Width="160" HorizontalAlignment="Left" />
+                                <HyperlinkButton Content="查看设备列表" Padding="0"
+                                                 VerticalAlignment="Center"
+                                                 Command="{x:Bind ViewModel.ShowGpuDevicesCommand, Mode=OneWay}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 「专家」专列：内置 ffmpeg 版本列表 -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16"
+                        Visibility="{x:Bind ViewModel.IsFfmpegListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Spacing="10">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Text="{x:Bind ViewModel.OutputDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button Grid.Column="1" Content="浏览…" Command="{x:Bind ViewModel.BrowseOutputCommand, Mode=OneWay}" />
-                            <Button Grid.Column="2" Content="打开" Command="{x:Bind ViewModel.OpenOutputFolderCommand, Mode=OneWay}" />
+
+                            <FontIcon Grid.Column="0" Glyph="&#xE7B8;" FontSize="24"
+                                      VerticalAlignment="Center" />
+
+                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="内置 ffmpeg 版本列表（专家）" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="可强制安装任意版本，不检查驱动兼容性；驱动不兼容时 NVENC 硬件编码可能不可用，但软件编码器照常使用"
+                                           Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <Button Grid.Column="2" Content="刷新版本列表"
+                                    Command="{x:Bind ViewModel.RefreshFfmpegListCommand, Mode=OneWay}"
+                                    VerticalAlignment="Center" />
                         </Grid>
-                    </StackPanel>
 
-                    <!-- 输出文件命名规则（作用于全部页面） -->
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="输出文件命名规则" Opacity="0.8" />
-                        <ComboBox ItemsSource="{x:Bind ViewModel.OutputFileNameRuleOptions, Mode=OneWay}"
-                                  SelectedItem="{x:Bind ViewModel.SelectedOutputFileNameRule, Mode=TwoWay}"
-                                  MinWidth="280" HorizontalAlignment="Left" />
-                        <TextBlock FontSize="12" Opacity="0.6" TextWrapping="Wrap">
-                            <Run Text="示例：" /><Run Text="{x:Bind ViewModel.OutputFileNamePreview, Mode=OneWay}" />
-                        </TextBlock>
-                        <TextBlock Text="「编码格式 / 分辨率」在对应页面未指定时会自动省略该段。"
-                                   FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
+                        <ListView ItemsSource="{x:Bind ViewModel.FfmpegReleaseRows, Mode=OneWay}"
+                                  SelectionMode="None"
+                                  MaxHeight="360">
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="models:FfmpegReleaseRow">
+                                    <Grid ColumnSpacing="12" Padding="4" VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
 
-            <!-- 「专家」专列：内置 ffmpeg 版本列表 -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="16"
-                    Visibility="{x:Bind ViewModel.IsFfmpegListVisible, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
-                <StackPanel Spacing="10">
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="{x:Bind Tag}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                            <TextBlock Text="{x:Bind PublishedAtText}" Opacity="0.6" FontSize="11" />
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Column="1" Text="{x:Bind SizeText}" Opacity="0.8"
+                                                   VerticalAlignment="Center" />
+
+                                        <Border Grid.Column="2" Padding="6,2" CornerRadius="3"
+                                                Background="#28E0A25E"
+                                                Visibility="{x:Bind IsPrerelease, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Text="prerelease" FontSize="10" Foreground="#FFE0A25E" />
+                                        </Border>
+
+                                        <TextBlock Grid.Column="3" Text="{x:Bind CompatibleText}" FontSize="12"
+                                                   VerticalAlignment="Center" Margin="0,0,8,0" />
+
+                                        <Button Grid.Column="4" Content="安装此版本"
+                                                Command="{x:Bind InstallCommand}"
+                                                CommandParameter="{x:Bind Mode=OneWay}"
+                                                IsEnabled="{x:Bind IsInstalling, Mode=OneWay, Converter={StaticResource InvertBool}}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══════════ 分组三：界面与行为 ═══════════ -->
+                <TextBlock Text="界面与行为" Style="{StaticResource SettingsGroupTitle}" />
+
+                <!-- 主题（重启生效） -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16">
                     <Grid ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -322,67 +366,139 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <FontIcon Grid.Column="0" Glyph="&#xE7B8;" FontSize="24"
+                        <FontIcon Grid.Column="0" Glyph="&#xE790;" FontSize="24"
                                   VerticalAlignment="Center" />
 
-                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                            <TextBlock Text="内置 ffmpeg 版本列表（专家）" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <TextBlock Text="可强制安装任意版本，不检查驱动兼容性；驱动不兼容时 NVENC 硬件编码可能不可用，但软件编码器照常使用"
-                                       Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock Text="主题" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
+                            <Border Style="{StaticResource RestartBadge}"
+                                    ToolTipService.ToolTip="主题在应用重启后生效；保存时会询问是否立即重启。">
+                                <TextBlock Text="⚠ 重启后生效" FontSize="11"
+                                           Foreground="{ThemeResource SystemFillColorCautionBrush}" />
+                            </Border>
                         </StackPanel>
 
-                        <Button Grid.Column="2" Content="刷新版本列表"
-                                Command="{x:Bind ViewModel.RefreshFfmpegListCommand, Mode=OneWay}"
-                                VerticalAlignment="Center" />
+                        <ComboBox Grid.Column="2" MinWidth="150" VerticalAlignment="Center"
+                                  ItemsSource="{x:Bind ViewModel.ThemeOptions, Mode=OneWay}"
+                                  SelectedItem="{x:Bind ViewModel.Theme, Mode=TwoWay}" />
                     </Grid>
+                </Border>
 
-                    <ListView ItemsSource="{x:Bind ViewModel.FfmpegReleaseRows, Mode=OneWay}"
-                              SelectionMode="None"
-                              MaxHeight="360">
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="models:FfmpegReleaseRow">
-                                <Grid ColumnSpacing="12" Padding="4" VerticalAlignment="Center">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
+                <!-- 保持习惯（即时生效，无需重启；长说明收纳进悬浮提示） -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                                    <StackPanel Grid.Column="0" Spacing="2">
-                                        <TextBlock Text="{x:Bind Tag}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                        <TextBlock Text="{x:Bind PublishedAtText}" Opacity="0.6" FontSize="11" />
-                                    </StackPanel>
+                        <FontIcon Grid.Column="0" Glyph="&#xE81C;" FontSize="24"
+                                  VerticalAlignment="Center" />
 
-                                    <TextBlock Grid.Column="1" Text="{x:Bind SizeText}" Opacity="0.8"
-                                               VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                                    ToolTipService.ToolTip="记住视频页的编码设置，下次打开自动恢复；关闭后每回使用默认参数。">
+                            <TextBlock Text="保持习惯" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
+                            <Border Style="{StaticResource InstantBadge}">
+                                <TextBlock Text="即时生效" FontSize="11" Opacity="0.85" />
+                            </Border>
+                        </StackPanel>
 
-                                    <Border Grid.Column="2" Padding="6,2" CornerRadius="3"
-                                            Background="#28E0A25E"
-                                            Visibility="{x:Bind IsPrerelease, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
-                                        <TextBlock Text="prerelease" FontSize="10" Foreground="#FFE0A25E" />
-                                    </Border>
+                        <ToggleSwitch Grid.Column="2" VerticalAlignment="Center"
+                                      IsOn="{x:Bind ViewModel.RememberLastSession, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
 
-                                    <TextBlock Grid.Column="3" Text="{x:Bind CompatibleText}" FontSize="12"
-                                               VerticalAlignment="Center" Margin="0,0,8,0" />
+                <!-- 用户级别（重启生效；命名与说明统一为「普通 / 高级 / 专家」） -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                                    <Button Grid.Column="4" Content="安装此版本"
-                                            Command="{x:Bind InstallCommand}"
-                                            CommandParameter="{x:Bind Mode=OneWay}"
-                                            IsEnabled="{x:Bind IsInstalling, Mode=OneWay, Converter={StaticResource InvertBool}}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                </StackPanel>
-            </Border>
+                        <FontIcon Grid.Column="0" Glyph="&#xE716;" FontSize="24"
+                                  VerticalAlignment="Center" />
 
-            <Button Content="保存配置" Style="{StaticResource AccentButtonStyle}"
-                    Command="{x:Bind ViewModel.SaveCommand, Mode=OneWay}" HorizontalAlignment="Left" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                                    ToolTipService.ToolTip="控制界面显示的详细程度：普通只显示常用功能，高级显示进阶参数，专家显示全部。切换后需重启应用生效。">
+                            <TextBlock Text="用户级别" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
+                            <Border Style="{StaticResource RestartBadge}">
+                                <TextBlock Text="⚠ 重启后生效" FontSize="11"
+                                           Foreground="{ThemeResource SystemFillColorCautionBrush}" />
+                            </Border>
+                        </StackPanel>
 
-            <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}" Opacity="0.7" />
+                        <ComboBox Grid.Column="2" MinWidth="150" VerticalAlignment="Center"
+                                  ItemsSource="{x:Bind ViewModel.UserLevelOptions, Mode=OneWay}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedUserLevel, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
 
-        </StackPanel>
-    </ScrollViewer>
+                <!-- 默认输出目录 + 命名规则 -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16">
+                    <StackPanel Spacing="12">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="默认输出目录" Opacity="0.8" />
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0"
+                                         Text="{x:Bind ViewModel.OutputDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         PlaceholderText="留空则与源文件同目录" />
+                                <Button Grid.Column="1" Content="浏览…" Command="{x:Bind ViewModel.BrowseOutputCommand, Mode=OneWay}" />
+                                <Button Grid.Column="2" Content="打开"
+                                        IsEnabled="{x:Bind ViewModel.HasOutputDirectory, Mode=OneWay}"
+                                        Command="{x:Bind ViewModel.OpenOutputFolderCommand, Mode=OneWay}" />
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- 输出文件命名规则（作用于全部页面；补充说明收纳进 ? 提示） -->
+                        <StackPanel Spacing="6">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="输出文件命名规则" Opacity="0.8" VerticalAlignment="Center" />
+                                <FontIcon Glyph="&#xE946;" FontSize="12" VerticalAlignment="Center"
+                                          ToolTipService.ToolTip="「编码格式 / 分辨率」在对应页面未指定时会自动省略该段。" />
+                            </StackPanel>
+                            <ComboBox ItemsSource="{x:Bind ViewModel.OutputFileNameRuleOptions, Mode=OneWay}"
+                                      SelectedItem="{x:Bind ViewModel.SelectedOutputFileNameRule, Mode=TwoWay}"
+                                      MinWidth="280" HorizontalAlignment="Left" />
+                            <TextBlock FontSize="12" Opacity="0.6" TextWrapping="Wrap">
+                                <Run Text="示例：" /><Run Text="{x:Bind ViewModel.OutputFileNamePreview, Mode=OneWay}" />
+                            </TextBlock>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 错误通道：仅承载检测失败等错误信息，成功态一律由顶部横幅承载（P1-7） -->
+                <TextBlock Text="{x:Bind ViewModel.StatusMessage, Mode=OneWay}"
+                           Opacity="0.8" FontSize="12" TextWrapping="Wrap"
+                           Visibility="{x:Bind ViewModel.StatusMessage, Mode=OneWay, Converter={StaticResource EmptyToCollapsed}}" />
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- 悬浮保存按钮：右下角常驻，修改后显示「未保存」红点（P0-2） -->
+        <Button HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,28,28"
+                Style="{StaticResource AccentButtonStyle}" CornerRadius="18" Padding="22,10"
+                Command="{x:Bind ViewModel.SaveCommand, Mode=OneWay}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{x:Bind ViewModel.SaveButtonText, Mode=OneWay}" VerticalAlignment="Center" />
+                <Border Width="9" Height="9" CornerRadius="4.5" VerticalAlignment="Center"
+                        Background="{ThemeResource SystemFillColorCriticalBrush}"
+                        ToolTipService.ToolTip="有未保存的修改"
+                        Visibility="{x:Bind ViewModel.IsDirty, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+        </Button>
+    </Grid>
 </Page>

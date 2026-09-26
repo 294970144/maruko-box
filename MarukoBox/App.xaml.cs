@@ -202,7 +202,9 @@ public partial class App : Application
         // UI 线程未捕获异常：标记 Handled=true 防止进程退出（闪退）。
         UnhandledException += OnUnhandledException;
 
-        // 后台 / 线程池线程未捕获异常：记录日志，尽量阻止进程退出。
+        // 后台 / 线程池线程未捕获异常：记录日志，留下现场。
+        // 【N14 修复】注释更正：AppDomain.UnhandledException 本身无法阻止进程终止
+        // （.NET 规范如此），"尽量阻止进程退出"的原注释是误导。
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             LogCrash((Exception)e.ExceptionObject, "AppDomain.UnhandledException");
 
@@ -216,7 +218,32 @@ public partial class App : Application
     private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
     {
         LogCrash(e.Exception, "Application.UnhandledException");
-        e.Handled = true; // 关键：阻止 UI 线程异常导致闪退
+
+#if DEBUG
+        // 【N14 修复】调试期不吞异常：Handled=true 会阻止调试器在未处理异常处中断，
+        // 问题被静默吞掉难定位。Debug 构建让异常照常抛出（调试器/本地日志都有现场）。
+#else
+        e.Handled = true; // 关键：阻止 UI 线程异常导致闪退（仅 Release）
+#endif
+    }
+
+    /// <summary>
+    /// 【N7 修复】统一退出入口。不依赖 <see cref="Microsoft.UI.Xaml.Application.Exit"/> 的
+    /// 隐式行为——官方文档对其只有一句 "Shuts down the app."，未对 unpackaged 应用承诺
+    /// 进程终止或 Window.Closed 触发（microsoft-ui-xaml#5301 系列已知问题）。
+    /// 显式完成：会话落盘 → 关窗 → 兜底终止进程。
+    /// </summary>
+    public static void Shutdown()
+    {
+        // ① 会话先落盘：Closed 可能不触发，显式保存是唯一可靠点（SaveSessionIfEnabled 幂等）。
+        MainWindow.SaveSessionIfEnabled();
+
+        // ② 正常关窗：关掉最后一个窗口后消息循环结束、进程自然退出（Closed 再保存一次，无害）。
+        (Window as MainWindow)?.Close();
+
+        // ③ 兜底：若消息循环未如预期终止（unpackaged 生命周期属未定义区域），
+        //    显式终止进程——「编码完成后退出」绝不能成为摆设。
+        Environment.Exit(0);
     }
 
     /// <summary>

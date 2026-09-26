@@ -54,7 +54,7 @@ maruko-box/
 ```powershell
 # 把 jellyfin-ffmpeg*portable_win64.zip 放入 third_party/ 后一键构建
 pwsh -File Installer-Inno\build-installer.ps1 -KeepPayload
-# 产物：dist\MarukoBoxSetup-Inno_1.4.1.exe
+# 产物：dist\MarukoBoxSetup-Inno_<版本>.exe（版本号随仓库csproj/iss同步变化）
 ```
 
 流程：`dotnet publish`（自包含 unpackaged）→ 解压内置 ffmpeg 进 payload → `ISCC.exe` 编译生成安装包（中文向导、开始菜单快捷方式、卸载注册）。
@@ -62,7 +62,7 @@ pwsh -File Installer-Inno\build-installer.ps1 -KeepPayload
 ## 安装与卸载
 
 ```text
-MarukoBoxSetup-Inno_1.4.1.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART   安装
+MarukoBoxSetup-Inno_<版本>.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART   安装
 unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART                     卸载
 ```
 

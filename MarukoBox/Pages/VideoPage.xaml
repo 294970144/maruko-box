@@ -120,10 +120,14 @@
                 </Border>
 
                 <!-- GPU 参数面板 -->
-                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                <!-- 【O5 修复】改用 x:Load 按需实例化：面板切走时整个子树从视觉树卸载，
+                     页面构造时也不再创建。面板内纯 x:Bind、无代码后置引用（已核查）。
+                     注意：x:Load 元素按 XAML 编译器要求必须带 x:Name。 -->
+                <Border x:Name="GpuPanel"
+                        x:Load="{x:Bind ViewModel.ShowGpuPanel, Mode=OneWay}"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1" CornerRadius="8" Padding="16"
-                        Visibility="{x:Bind ViewModel.ShowGpuPanel, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                        BorderThickness="1" CornerRadius="8" Padding="16">
                     <StackPanel Spacing="12">
                         <TextBlock Text="GPU 编码参数" Style="{StaticResource BodyStrongTextBlockStyle}" />
 
@@ -188,11 +192,12 @@
                     </StackPanel>
                 </Border>
 
-                <!-- CPU 参数面板 -->
-                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                <!-- CPU 参数面板（同 GPU 面板：x:Load 按需实例化） -->
+                <Border x:Name="CpuPanel"
+                        x:Load="{x:Bind ViewModel.ShowCpuPanel, Mode=OneWay}"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1" CornerRadius="8" Padding="16"
-                        Visibility="{x:Bind ViewModel.ShowCpuPanel, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                        BorderThickness="1" CornerRadius="8" Padding="16">
                     <StackPanel Spacing="12">
                         <TextBlock Text="CPU 编码参数" Style="{StaticResource BodyStrongTextBlockStyle}" />
 

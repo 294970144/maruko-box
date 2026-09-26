@@ -89,6 +89,14 @@ if ($versionTag) {
 
     $sizeMb = [math]::Round((Get-Item -LiteralPath $expected).Length / 1MB, 1)
     "    产物已就位: $expected ($sizeMb MB)"
+
+    # 【N8 修复】自动生成 .sha256 伴随文件（随发布资产一起上传 GitHub / Gitee 双端）。
+    # 此前 CN 源（兰州镜像为纯目录索引，无 .sha256）与 Gitee Release 都没有校验文件，
+    # 导致恰好在最需要校验的国内用户群体，校验全程静默跳过。
+    $sha256 = (Get-FileHash -LiteralPath $expected -Algorithm SHA256).Hash.ToLowerInvariant()
+    $shaPath = "$expected.sha256"
+    Set-Content -LiteralPath $shaPath -Value "$sha256  $(Split-Path -Leaf $expected)" -Encoding ascii
+    "    校验文件已生成: $shaPath"
 }
 
 "=== 4/4  清理中间 payload ==="

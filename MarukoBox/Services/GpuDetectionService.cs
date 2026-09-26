@@ -127,7 +127,8 @@ public class GpuDetectionService : IGpuDetectionService
     }
 
     /// <summary>
-    /// 通过 nvidia-smi 获取显卡型号与驱动版本，并推断 NVENC API 版本。
+    /// 通过 nvidia-smi 获取显卡型号与驱动版本，并推断 NVENC API 版本；
+    /// 同时枚举全部 GPU 设备（index + 型号）供多 GPU 序号上限与设备列表使用。
     /// nvidia-smi 不存在时（非 N 卡）静默跳过。
     /// </summary>
     private static async Task DetectNvidiaGpuAsync(GpuInfo info, CancellationToken ct)
@@ -136,7 +137,7 @@ public class GpuDetectionService : IGpuDetectionService
         {
             var output = await RunAsync(
                 "nvidia-smi",
-                "--query-gpu=name,driver_version --format=csv,noheader",
+                "--query-gpu=index,name,driver_version --format=csv,noheader",
                 ct);
 
             if (string.IsNullOrWhiteSpace(output))
@@ -144,19 +145,35 @@ public class GpuDetectionService : IGpuDetectionService
                 return;
             }
 
-            // 输出格式: "NVIDIA GeForce RTX 4060 Laptop GPU, 610.62"
-            var firstLine = output.Split('\n', StringSplitOptions.RemoveEmptyEntries)[0].Trim();
-            var parts = firstLine.Split(',');
-
-            if (parts.Length >= 2)
+            // 每行格式: "0, NVIDIA GeForce RTX 4060 Laptop GPU, 610.62"
+            // （多卡时多行；nvidia-smi 按 index 升序输出）
+            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (lines.Length == 0)
             {
-                info.GpuName = parts[0].Trim();
-                info.DriverVersion = parts[1].Trim();
+                return;
+            }
+
+            foreach (var line in lines)
+            {
+                var parts = line.Split(',');
+                if (parts.Length >= 3
+                    && int.TryParse(parts[0].Trim(), out var index))
+                {
+                    info.GpuDevices.Add(new GpuDeviceEntry(index, parts[1].Trim()));
+                }
+            }
+
+            // 首行继续作为「主显卡」信息源（与既有单卡展示逻辑兼容）
+            var firstParts = lines[0].Split(',');
+            if (firstParts.Length >= 3)
+            {
+                info.GpuName = firstParts[1].Trim();
+                info.DriverVersion = firstParts[2].Trim();
                 info.NvencApiVersion = InferNvencApiVersion(info.DriverVersion);
             }
-            else if (parts.Length == 1)
+            else if (firstParts.Length == 2)
             {
-                info.GpuName = parts[0].Trim();
+                info.GpuName = firstParts[1].Trim();
             }
         }
         catch

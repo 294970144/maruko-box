@@ -427,7 +427,17 @@ public sealed partial class TrimPage : Page
             SuggestedStartLocation = PickerLocationId.VideosLibrary,
             SuggestedFileName = Path.GetFileNameWithoutExtension(ViewModel.InputPath) + "_trim"
         };
-        picker.FileTypeChoices.Add("视频文件", new[] { Path.GetExtension(ViewModel.InputPath) });
+
+        // 【N12 修复】FileTypeChoices 的定义是"合法文件类型（扩展名）"集合，
+        // 源文件无扩展名时 Path.GetExtension 返回空串——空串不构成合法类型，
+        // 官方 Remarks 明确保存场景不支持通配符，空项行为未定义（拒绝或异常）。
+        // 兜底 .mp4（与 TrimViewModel.RefreshOutputPath 的空扩展名兜底一致）。
+        var saveExt = Path.GetExtension(ViewModel.InputPath);
+        if (string.IsNullOrEmpty(saveExt))
+        {
+            saveExt = ".mp4";
+        }
+        picker.FileTypeChoices.Add("视频文件", new[] { saveExt });
 
         InitializeWithWindow.Initialize(picker, App.WindowHandle);
 
@@ -504,6 +514,19 @@ public sealed partial class TrimPage : Page
     protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
+
+        // 【N2 修复】MediaPlayer 是独立于视觉树的播放引擎（官方《Play audio and video
+        // with MediaPlayer》："You can play media in a MediaPlayer without displaying it
+        // in XAML"），页面被 Frame 换掉后不会自动暂停，声音会一直出、PositionChanged
+        // 也持续回调已离开的页面。导航离开即显式暂停并断开源；element 销毁时官方会
+        // 代为 Close 它自动创建的 MediaPlayer，故无需手动 Dispose。
+        var player = PreviewPlayer.MediaPlayer;
+        if (player is not null)
+        {
+            player.Pause();
+            player.Source = null;
+        }
+
         MarukoBox.MainWindow.SaveSessionIfEnabled();
     }
 }

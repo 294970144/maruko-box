@@ -140,6 +140,37 @@ public static class OutputNaming
         return IsSamePath(full, sourcePath) ? InsertSuffix(full, "out") : full;
     }
 
+    /// <summary>
+    /// 【N3 修复】批量队列防同名互覆：候选输出路径若已被本批次的其它任务占用，
+    /// 追加序号（name_2.ext、name_3.ext …）直到唯一。
+    /// <para>
+    /// 场景：选「原名」规则 + 指定输出文件夹后，从不同目录拖入同名源
+    /// （A\video.mp4 与 B\video.mp4），两者生成的输出路径完全相同，
+    /// 后一次编码带 -y 直接覆盖前一次的产物——静默丢失且不可恢复。
+    /// 只防「本批次内」冲突；磁盘上已存在的旧文件仍按 ffmpeg -y 的用户可预期覆盖语义处理。
+    /// </para>
+    /// </summary>
+    public static string DedupeBatch(string fullPath, ISet<string> assigned)
+    {
+        if (assigned.Add(fullPath))
+        {
+            return fullPath;
+        }
+
+        var dir = Path.GetDirectoryName(fullPath) ?? string.Empty;
+        var name = Path.GetFileNameWithoutExtension(fullPath);
+        var ext = Path.GetExtension(fullPath);
+
+        for (var i = 2; ; i++)
+        {
+            var candidate = Path.Combine(dir, $"{name}_{i}{ext}");
+            if (assigned.Add(candidate))
+            {
+                return candidate;
+            }
+        }
+    }
+
     /// <summary>设置页示例预览：用一份固定的假想上下文生成示例文件名。</summary>
     public static string Preview(string? rule) => BuildFileName(rule,
         new OutputNamingContext("示例视频.mp4", "encoded", "hevc", "1920x1080", ".mp4"));
