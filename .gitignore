@@ -59,3 +59,7 @@ build_log.txt
 # --- 误留 / 草稿文件（不入库） ---
 # is_setup.exe：疑似误留的可执行文件，绝不可入库
 is_setup.exe
+
+# --- ffmpeg 自编译瘦包研究草稿（本地研究用，非产品构建流程，不入库） ---
+ffmpeg_minimal_build.sh
+ffmpeg_trim_analysis.md
