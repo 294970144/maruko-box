@@ -14,7 +14,7 @@
 #endif
 
 #define MyAppName "MarukoBox 2026"
-#define MyAppVersion "1.10.3"
+#define MyAppVersion "1.10.6"
 #define MyAppPublisher "MarukoBox"
 #define MyAppURL "https://github.com/294970144/maruko-box"
 #define MyAppExeName "MarukoBox.exe"
@@ -133,28 +133,9 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// 【遗留 P2 修复】卸载时询问是否清除用户数据。
-//
-// 用户数据（config.json / session.json / logs / Updates 缓存）存放在
-// %LOCALAPPDATA%\MarukoBox（{app} 之外），此前卸载后全部残留。
-// 默认保留（保守默认）：卸载本体不碰它，这里只提供可选的一次性清理；
-// /VERYSILENT 无人值守场景 MsgBox 不弹出，按保留处理。
+// 卸载不再询问「是否删除个人数据」（该功能已放弃）。
+// 用户数据（config.json / session.json / logs / Updates 缓存）位于
+// %LOCALAPPDATA%\MarukoBox（{app} 之外），卸载 / 覆盖本就不碰它，始终保留。
+// 原 CurUninstallStepChanged 中的数据清理确认框已整体移除。
 // ---------------------------------------------------------------------------
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  DataDir: String;
-begin
-  if CurUninstallStep <> usPostUninstall then
-    Exit;
-
-  DataDir := ExpandConstant('{localappdata}\MarukoBox');
-  if not DirExists(DataDir) then
-    Exit;
-
-  if MsgBox('是否同时删除个人数据（配置 / 会话 / 日志 / 更新缓存）？' #13#10 #13#10 +
-            DataDir, mbConfirmation, MB_YESNO) = IDYES then
-  begin
-    DelTree(DataDir, True, True, True);
-  end;
-end;
 

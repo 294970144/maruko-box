@@ -1,6 +1,15 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
+using Windows.UI;
+using MarukoBox.Models;
 using MarukoBox.Pages;
 using MarukoBox.Services;
 
@@ -35,6 +44,22 @@ public sealed partial class MainWindow : Window
         ApplyNavPaneStateFromConfig();
     }
 
+    /// <summary>
+    /// 将窗口提到前台（系统通知被点击时调用）。
+    /// 最小化状态下也经 <see cref="Microsoft.UI.Windowing.AppWindow.Show"/> 恢复显示。
+    /// </summary>
+    public void BringToForeground()
+    {
+        try
+        {
+            AppWindow.Show();
+        }
+        catch (Exception ex)
+        {
+            App.LogCrash(ex, "MainWindow.BringToForeground");
+        }
+    }
+
     /// <summary>窗口最小宽度（三列布局的可用地：左 200 + 中 300 + 右 220 + 间距与内边距）。</summary>
     private const int MinWindowWidth = 1000;
 
@@ -44,13 +69,13 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 「设置」导航项上的重启提醒徽标：主题 / 用户级别保存后选择「稍后重启」时点亮，
     /// 直到用户不再有未生效的重启类修改（再次保存恢复原值）或应用重启。
+    /// <para>经 <see cref="NavItemModel.RestartBadgeVisibility"/> 驱动（列表项已数据绑定）；
+    /// 若在导航列表构建前被调用（如启动早期），值暂存待构建后套用。</para>
     /// </summary>
     public void SetRestartPending(bool visible)
     {
-        if (RestartPendingBadge is not null)
-        {
-            RestartPendingBadge.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        }
+        _restartPending = visible;
+        ApplyBadgeState();
     }
 
     /// <summary>
@@ -59,10 +84,24 @@ public sealed partial class MainWindow : Window
     /// </summary>
     public void SetUpdateAvailable(bool visible)
     {
-        if (UpdateAvailableBadge is not null)
+        _updateAvailable = visible;
+        ApplyBadgeState();
+    }
+
+    /// <summary>徽标状态暂存（导航列表构建完成前也允许设置，构建后自动套用）。</summary>
+    private bool _restartPending;
+
+    private bool _updateAvailable;
+
+    private void ApplyBadgeState()
+    {
+        if (_settingsItem is null)
         {
-            UpdateAvailableBadge.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            return; // 尚未构建，值已暂存，构建时套用
         }
+
+        _settingsItem.RestartBadgeVisibility = _restartPending ? Visibility.Visible : Visibility.Collapsed;
+        _settingsItem.UpdateBadgeVisibility = _updateAvailable ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ---------- 导航窗格拖拽调宽（v1.9.1 根网格热区方案，参考 Edge 侧边栏交互） ----------
@@ -305,41 +344,296 @@ public sealed partial class MainWindow : Window
 
     private void NavView_Loaded(object sender, RoutedEventArgs e)
     {
-        // 默认进入「视频」页（XAML 已标记 IsSelected）。
-        ContentFrame.Navigate(typeof(VideoPage));
+        // 构建侧栏列表（功能页按「保持习惯」记忆的顺序 + 固定系统项），并默认高亮视频页。
+        BuildNavItems();
+
+        // 默认选中「视频」页：设置 SelectedItem 触发 SelectionChanged 完成导航；
+        // 若所选 Tag 当前不存在（理论上不会），兜底直接 Navigate。
+        var start = _navItems.FirstOrDefault(i => i.Tag == DefaultStartTag);
+        if (start is not null)
+        {
+            FeatureList.SelectedItem = start;
+        }
+
+        if (ContentFrame.Content is null)
+        {
+            ContentFrame.Navigate(typeof(VideoPage));
+        }
     }
 
-    private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    /// <summary>侧栏选中项变更 → 导航（功能页与系统项统一走模型上的 PageType，不再按 Tag 硬编码）。</summary>
+    private void FeatureList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (args.SelectedItem is not NavigationViewItem item)
+        if (FeatureList.SelectedItem is not NavItemModel model)
+        {
+            return; // 重排 / 清空时的中间态，不导航
+        }
+
+        if (model.PageType == typeof(PlaceholderPage))
+        {
+            ContentFrame.Navigate(model.PageType, model.Label);
+        }
+        else
+        {
+            ContentFrame.Navigate(model.PageType);
+        }
+    }
+
+    /// <summary>
+    /// 起拖前拦截：固定项（设置 / 关于）不允许被拖走。
+    /// 注意 e.Items 可能含多项（多选时），任一为固定项即整单取消。
+    /// </summary>
+    private void FeatureList_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
+    {
+        if (e.Items.Any(i => i is NavItemModel model && model.IsFixed))
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        // 消除「两张卡」：ListView 内置重排会把源项继续留在列表里渲染（作为被拖占位），
+        // 同时系统又生成一张跟随鼠标的 drag visual —— 于是原位与被拖卡同时可见，
+        // 让位动画经过时更会与相邻项重叠（Edge 观感里原位只应留下一个空槽）。
+        // 故起拖时把源容器隐藏：用 Opacity=0（而非 Visibility=Collapsed）保留占位高度，
+        // 这样"空槽"会随插入位置一起移动，正是「经过时让出空位」的视觉。
+        foreach (var item in e.Items)
+        {
+            if (FeatureList.ContainerFromItem(item) is UIElement container)
+            {
+                container.Opacity = 0;
+                _hiddenDragContainers.Add(container);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 拖拽完成：系统已按插入位置重排 ItemsSource（ObservableCollection）。
+    /// 先恢复被隐藏的源容器，再把固定项强制归位到列表末尾（防止被插到功能页之间），最后持久化顺序。
+    /// 注意：取消拖拽（ESC / 拖出列表外）同样会触发本事件，故恢复逻辑必须无条件执行。
+    /// </summary>
+    private void FeatureList_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
+    {
+        RestoreDragContainers();
+        NormalizeFixedItemsToEnd();
+        PersistNavOrder();
+    }
+
+    /// <summary>
+    /// 恢复拖拽期间被隐藏的源容器；并全量兜底一次——容器可能被虚拟化回收/复用，
+    /// 仅按记录恢复存在「留下永久透明项」的风险。
+    /// </summary>
+    private void RestoreDragContainers()
+    {
+        foreach (var container in _hiddenDragContainers)
+        {
+            container.Opacity = 1;
+        }
+
+        _hiddenDragContainers.Clear();
+
+        foreach (var model in _navItems)
+        {
+            if (FeatureList.ContainerFromItem(model) is UIElement container && container.Opacity < 1)
+            {
+                container.Opacity = 1;
+            }
+        }
+    }
+
+    // ---------- 导航栏：ListView 集合驱动 + WinUI 内置拖拽重排（v1.10.6 修订） ----------
+    // 官方依据（Microsoft Learn《NavigationView》/ WinUI Gallery 拖拽示例）：
+    // NavigationView 的菜单区内部是 ItemsRepeater，**没有内置重排与让位动画**——
+    // 自绘拖拽必然「跳格生硬」。WinUI 的 ListView 则有官方 drag-reorder：
+    // CanDragItems + AllowDrop + CanReorderItems 三件套，系统自带「被拖项跟随鼠标」的
+    // 拖动视觉、插入指示线与平滑让位动画。故整个侧栏（功能页 + 设置/关于）统一放在
+    // NavigationView.PaneCustomContent 的 ListView 里，顺序由 ListView 自己维护。
+    //
+    // 硬性前提（踩坑点，勿改）：
+    //  ①数据源必须 ObservableCollection——用 List 则重排后 UI 不更新；
+    //  ②ItemsPanel 必须实现 IInsertionPanel（默认面板满足），换成自定义面板
+    //    （如 WrapPanel）会导致拖拽时显示红色禁止图标；
+    //  ③三件套需在 UI 树构建完成后生效（本处在 XAML 静态声明，等价 Loaded 后设置）。
+    //
+    // 设置 / 关于标 IsFixed=true：DragItemsStarting 里 Cancel 禁拖，
+    // 并在拖拽完成后强制归位到列表末尾（防止被插进功能页之间）。
+    // 「保持习惯」开启时，功能页顺序写入 session.json 的 NavItemOrder。
+
+    /// <summary>启动默认选中的功能页 Tag（即便自定义过顺序也不改默认进入页）。</summary>
+    private const string DefaultStartTag = "Video";
+
+    /// <summary>侧栏导航项数据源（功能页 + 固定系统项），集合顺序即 UI 顺序。</summary>
+    private readonly ObservableCollection<NavItemModel> _navItems = new();
+
+    /// <summary>「设置」项实例（新版 / 重启徽标经其模型属性驱动）。</summary>
+    private NavItemModel? _settingsItem;
+
+    /// <summary>拖拽期间被临时隐藏的源项容器（拖完统一恢复，避免「原位残留」永久透明）。</summary>
+    private readonly List<UIElement> _hiddenDragContainers = new();
+
+    /// <summary>构建侧栏列表（仅首次）：功能页按已记忆顺序 + 固定系统项置尾。</summary>
+    private void BuildNavItems()
+    {
+        if (_navItems.Count > 0)
         {
             return;
         }
 
-        var tag = item.Tag?.ToString() ?? string.Empty;
-
-        var pageType = tag switch
+        foreach (var tag in ResolveOrderFromSession())
         {
-            "Video" => typeof(VideoPage),
-            "Trim" => typeof(TrimPage),
-            "Extract" => typeof(ExtractPage),
-            "Audio" => typeof(AudioPage),
-            "Mux" => typeof(MuxPage),
-            "Image" => typeof(ImagePage),
-            "Tools" => typeof(ToolsPage),
-            "Subtitle" => typeof(SubtitlePage),
-            "Settings" => typeof(SettingsPage),
-            "About" => typeof(AboutPage),
-            _ => typeof(PlaceholderPage)
-        };
-
-        if (pageType == typeof(PlaceholderPage))
-        {
-            ContentFrame.Navigate(pageType, item.Content?.ToString() ?? tag);
+            var def = NavItemModel.DefaultFeatures.FirstOrDefault(f => f.Tag == tag);
+            if (def is not null)
+            {
+                _navItems.Add(def);
+            }
         }
-        else
+
+        foreach (var sys in NavItemModel.DefaultSystemItems)
         {
-            ContentFrame.Navigate(pageType);
+            _navItems.Add(sys);
+            if (sys.Tag == "Settings")
+            {
+                _settingsItem = sys;
+            }
+        }
+
+        // 套用列表构建前就已设置的徽标状态（如启动自动检查发现新版）
+        ApplyBadgeState();
+
+        FeatureList.ItemsSource = _navItems;
+    }
+
+    /// <summary>读取「保持习惯」下的自定义顺序；关闭或缺失时回落默认顺序（向前兼容）。</summary>
+    private List<string> ResolveOrderFromSession()
+    {
+        try
+        {
+            if (!AppServices.Config.Load().RememberLastSession)
+            {
+                return NavItemModel.DefaultFeatureTags.ToList();
+            }
+
+            var saved = ConfigService.LoadSession()?.NavItemOrder;
+            if (saved is null || saved.Count == 0)
+            {
+                return NavItemModel.DefaultFeatureTags.ToList();
+            }
+
+            // 以已存顺序为基准：过滤非法 Tag、去重，并补齐缺失的默认 Tag（向前兼容）。
+            var valid = saved.Where(t => NavItemModel.DefaultFeatureTags.Contains(t)).Distinct().ToList();
+            foreach (var t in NavItemModel.DefaultFeatureTags)
+            {
+                if (!valid.Contains(t))
+                {
+                    valid.Add(t);
+                }
+            }
+
+            return valid;
+        }
+        catch
+        {
+            return NavItemModel.DefaultFeatureTags.ToList();
+        }
+    }
+
+    /// <summary>把当前功能页顺序写入 session（仅「保持习惯」开启时；固定项不写入）。</summary>
+    private void PersistNavOrder()
+    {
+        try
+        {
+            if (!AppServices.Config.Load().RememberLastSession)
+            {
+                return; // 关闭则不持久化，顺序仅本次会话生效
+            }
+
+            var session = ConfigService.LoadSession() ?? new SessionState();
+            session.NavItemOrder = _navItems.Where(i => !i.IsFixed).Select(i => i.Tag).ToList();
+            ConfigService.SaveSession(session);
+        }
+        catch
+        {
+            // 持久化失败不阻塞交互
+        }
+    }
+
+    /// <summary>恢复导航栏默认顺序（设置页「恢复默认导航顺序」调用）。</summary>
+    public void ResetNavOrderToDefault()
+    {
+        var selected = FeatureList.SelectedItem;
+        var fixedItems = _navItems.Where(i => i.IsFixed).ToList();
+
+        _navItems.Clear();
+        foreach (var f in NavItemModel.DefaultFeatures)
+        {
+            _navItems.Add(f);
+        }
+
+        foreach (var s in fixedItems)
+        {
+            _navItems.Add(s);
+        }
+
+        // 重建集合会清空 ListView 选中，实例仍在集合中故可直接还原
+        if (selected is not null)
+        {
+            FeatureList.SelectedItem = selected;
+        }
+
+        PersistNavOrder();
+    }
+
+    /// <summary>把固定项（设置 / 关于）归位到列表末尾，保持其相对顺序。</summary>
+    private void NormalizeFixedItemsToEnd()
+    {
+        var firstFixed = -1;
+        for (var i = 0; i < _navItems.Count; i++)
+        {
+            if (_navItems[i].IsFixed)
+            {
+                firstFixed = i;
+                break;
+            }
+        }
+
+        if (firstFixed < 0)
+        {
+            return;
+        }
+
+        // 固定项已全部位于末尾则无需重建（避免无谓的容器重建与选中闪烁）
+        var alreadyAtEnd = true;
+        for (var i = firstFixed; i < _navItems.Count; i++)
+        {
+            if (!_navItems[i].IsFixed)
+            {
+                alreadyAtEnd = false;
+                break;
+            }
+        }
+
+        if (alreadyAtEnd)
+        {
+            return;
+        }
+
+        var selected = FeatureList.SelectedItem;
+        var features = _navItems.Where(i => !i.IsFixed).ToList();
+        var fixedItems = _navItems.Where(i => i.IsFixed).ToList();
+
+        _navItems.Clear();
+        foreach (var f in features)
+        {
+            _navItems.Add(f);
+        }
+
+        foreach (var s in fixedItems)
+        {
+            _navItems.Add(s);
+        }
+
+        if (selected is not null)
+        {
+            FeatureList.SelectedItem = selected;
         }
     }
 }

@@ -144,6 +144,13 @@ public class AppConfig
     public bool AutoCheckUpdates { get; set; } = true;
 
     /// <summary>
+    /// 系统通知（Toast）总开关：开启时媒体转码批量完成等事件推送 Windows 系统通知；
+    /// 关闭则应用完全不发送系统通知。即时生效（即改即存），无需重启。
+    /// 默认开启，保持与升级前的行为一致（升级前无此开关，等同于始终开启）。
+    /// </summary>
+    public bool NotificationsEnabled { get; set; } = true;
+
+    /// <summary>
     /// 左侧导航窗格的展开宽度（px，Expanded 态）。拖拽分隔条调整；即改即存。
     /// </summary>
     /// <remarks>

@@ -123,6 +123,29 @@
                             </StackPanel>
                         </Grid>
 
+                        <!-- 系统通知开关（即改即存，非专家专属）：关闭后应用完全不发送 Toast；
+                             可在下方「系统通知测试」卡片（专家）验证通道与开关行为 -->
+                        <Grid ColumnSpacing="12" Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="系统通知" Opacity="0.8" VerticalAlignment="Center" />
+                                <FontIcon Glyph="&#xE946;" FontSize="12" VerticalAlignment="Center"
+                                          ToolTipService.ToolTip="开启后，媒体转码批量完成等事件推送 Windows 系统通知（Toast）。关闭则完全不发送，且不影响其他功能。开关即时生效、自动保存。" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                        VerticalAlignment="Center">
+                                <ToggleSwitch IsOn="{x:Bind ViewModel.NotificationsEnabled, Mode=TwoWay}"
+                                              OnContent="" OffContent=""
+                                              MinWidth="0" Margin="0" />
+                            </StackPanel>
+                        </Grid>
+
                         <!-- 下载进度（仅下载阶段可见）：有总大小时走确定态（与文字 MB/百分比一致），
                              服务器未返回大小时才退回不定态动画 -->
                         <ProgressBar Value="{x:Bind ViewModel.UpdateProgressPercent, Mode=OneWay}"
@@ -135,6 +158,24 @@
                                  IsOpen="{x:Bind ViewModel.HasUpdateStatus, Mode=OneWay}"
                                  Message="{x:Bind ViewModel.UpdateStatusMessage, Mode=OneWay}"
                                  Severity="{x:Bind ViewModel.UpdateStatusSeverity, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 系统通知测试（专家专属）：检查通知调用是否提交给 Windows -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16"
+                        Visibility="{x:Bind ViewModel.UserLevel, Mode=OneWay, Converter={StaticResource UserLevelToVisibility}, ConverterParameter='Expert'}">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="系统通知测试" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="检查应用能否将测试通知提交给 Windows；实际显示受系统通知设置影响。"
+                                   Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                        <Button Content="发送测试通知"
+                                Command="{x:Bind ViewModel.TestNotificationCommand, Mode=OneWay}" />
+                        <InfoBar IsClosable="False"
+                                 IsOpen="{x:Bind ViewModel.HasTestNotification, Mode=OneWay}"
+                                 Message="{x:Bind ViewModel.TestNotificationMessage, Mode=OneWay}"
+                                 Severity="{x:Bind ViewModel.TestNotificationSeverity, Mode=OneWay}" />
                     </StackPanel>
                 </Border>
 
@@ -431,6 +472,34 @@
 
                         <ToggleSwitch Grid.Column="2" VerticalAlignment="Center"
                                       IsOn="{x:Bind ViewModel.RememberLastSession, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <!-- 导航顺序自定义（即时生效；拖拽导航栏功能项左侧握柄即可重排，此处可一键还原） -->
+                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="16">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <FontIcon Grid.Column="0" Glyph="&#xE8CB;" FontSize="24"
+                                  VerticalAlignment="Center" />
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                                    ToolTipService.ToolTip="在左侧导航栏按住功能项左侧的握柄拖动即可调整顺序；仅功能页可排，设置/关于固定。">
+                            <TextBlock Text="导航顺序自定义" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
+                            <Border Style="{StaticResource InstantBadge}">
+                                <TextBlock Text="即时生效" FontSize="11" Opacity="0.85" />
+                            </Border>
+                        </StackPanel>
+
+                        <Button Grid.Column="2" VerticalAlignment="Center"
+                                Content="恢复默认导航顺序"
+                                Command="{x:Bind ViewModel.ResetNavOrderCommand}" />
                     </Grid>
                 </Border>
 

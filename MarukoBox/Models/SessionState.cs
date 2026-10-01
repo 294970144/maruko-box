@@ -26,6 +26,14 @@ public class SessionState
     /// <summary>裁剪页工作参数（快速/精确、恒定质量、编码器）。</summary>
     public TrimSettings Trim { get; set; } = new();
 
+    /// <summary>
+    /// 导航栏「功能页」的自定义顺序（仅 Tag 列表：Video / Audio / Mux / Subtitle / Extract / Image / Tools / Trim）。
+    /// 跟随「保持习惯」存盘：开启时拖拽重排的结果写回此处，下次启动按此顺序重建导航栏；
+    /// 关闭「保持习惯」则启动忽略本字段、恢复默认顺序。设置 / 关于与分组分隔符不在其中（固定）。
+    /// 旧 session.json 缺本字段时由属性初始化器回落空列表（<c>ApplyNavOrderFromSession</c> 据此用默认顺序）。
+    /// </summary>
+    public List<string> NavItemOrder { get; set; } = new();
+
     /// <summary>裁剪页工作参数快照（「保持习惯」记忆）。</summary>
     public sealed class TrimSettings
     {

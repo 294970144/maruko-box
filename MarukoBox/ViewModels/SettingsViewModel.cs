@@ -180,6 +180,10 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial bool AutoCheckUpdates { get; set; } = true;
 
+    /// <summary>系统通知总开关：默认开启，即改即存（关闭后完全不发送 Toast）。</summary>
+    [ObservableProperty]
+    public partial bool NotificationsEnabled { get; set; } = true;
+
     [ObservableProperty]
     public partial string UpdateStatusMessage { get; set; } = string.Empty;
 
@@ -190,6 +194,18 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>更新/依赖检查结果的严重级别（四级状态体系：成功/警告/错误/信息）。</summary>
     [ObservableProperty]
     public partial InfoBarSeverity UpdateStatusSeverity { get; set; } = InfoBarSeverity.Informational;
+
+    /// <summary>通知测试反馈文案（专家「发送测试通知」按钮的结果反馈）。</summary>
+    [ObservableProperty]
+    public partial string TestNotificationMessage { get; set; } = string.Empty;
+
+    /// <summary>通知测试反馈是否可见（驱动反馈 InfoBar 的 IsOpen）。</summary>
+    [ObservableProperty]
+    public partial bool HasTestNotification { get; set; }
+
+    /// <summary>通知测试反馈严重级别。</summary>
+    [ObservableProperty]
+    public partial InfoBarSeverity TestNotificationSeverity { get; set; } = InfoBarSeverity.Informational;
 
     /// <summary>用户级别下拉的当前选中项（中文显示名）。</summary>
     [ObservableProperty]
@@ -238,6 +254,7 @@ public partial class SettingsViewModel : ObservableObject
         OutputFileNamePreview = OutputNaming.Preview(SelectedOutputFileNameRule);
         SelectedUpdateSource = UpdateSourceCodeToDisplay(config.UpdateSource);
         AutoCheckUpdates = config.AutoCheckUpdates;
+        NotificationsEnabled = config.NotificationsEnabled;
 
         // 记录"未保存前"的实际值，Save() 比对时使用——
         // 避免 UI 控件绑定初期就把原值覆写成新值，导致重启判定永远为"未变"。
@@ -479,6 +496,76 @@ public partial class SettingsViewModel : ObservableObject
         _ = dialog.ShowAsync();
     }
 
+    /// <summary>发送系统通知测试 Toast，并反馈 SDK 的提交结果。</summary>
+    [RelayCommand]
+    private async Task TestNotificationAsync()
+    {
+        if (!NotificationService.IsAvailable)
+        {
+            SetTestNotification(
+                "通知通道未就绪。本次运行无法提交系统通知，请查看本地日志中的 NotificationService 初始化错误。",
+                InfoBarSeverity.Error);
+            return;
+        }
+
+        if (!NotificationsEnabled)
+        {
+            SetTestNotification(
+                "系统通知已关闭。请先在上方打开「系统通知」开关，再发送测试通知。",
+                InfoBarSeverity.Warning);
+            return;
+        }
+
+        var result = await NotificationService.ShowTaskCompletedAsync(
+            "测试通知",
+            "这是来自 MarukoBox 的系统通知测试。若未看到通知，请检查 Windows 的应用通知设置和请勿打扰状态。");
+
+        switch (result)
+        {
+            case NotificationSendResult.Submitted:
+                SetTestNotification(
+                    "通知已提交给 Windows。是否显示取决于系统通知设置和请勿打扰状态。",
+                    InfoBarSeverity.Success);
+                break;
+            case NotificationSendResult.QueueRejected:
+                SetTestNotification("应用 UI 队列已关闭，通知未能提交。", InfoBarSeverity.Error);
+                break;
+            case NotificationSendResult.NotReady:
+                SetTestNotification("通知通道未就绪，通知未能提交。", InfoBarSeverity.Error);
+                break;
+            default:
+                SetTestNotification("Windows 通知接口调用失败，请查看本地日志。", InfoBarSeverity.Error);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 恢复导航栏默认顺序（设置页「恢复默认导航顺序」按钮）。
+    /// 调用 MainWindow 实例方法：还原内存顺序并（在「保持习惯」开启时）清掉 session 里的自定义顺序。
+    /// </summary>
+    [RelayCommand]
+    private void ResetNavOrder()
+    {
+        try
+        {
+            if (App.Window is MainWindow main)
+            {
+                main.ResetNavOrderToDefault();
+            }
+        }
+        catch
+        {
+            // 失败不打断交互
+        }
+    }
+
+    private void SetTestNotification(string text, InfoBarSeverity severity)
+    {
+        TestNotificationMessage = text;
+        HasTestNotification = !string.IsNullOrEmpty(text);
+        TestNotificationSeverity = severity;
+    }
+
     /// <summary>
     /// 保存配置到磁盘。若本次保存涉及「主题」或「用户级别」与上次保存时不同，
     /// 则弹"立即重启？"对话框，主按钮触发 <see cref="RestartApp"/>。
@@ -490,7 +577,7 @@ public partial class SettingsViewModel : ObservableObject
         var levelChanged = SelectedUserLevel != _savedUserLevelBeforeSave;
 
         // 【H1 修复】必须「Load → 改字段 → Save」写穿，不能用 new AppConfig 逐字段赋值。
-        // 后者只赋了 9 个字段，而 AppConfig 有 11 个可持久化属性——未赋值的两个
+        // 后者只赋了 9 个字段，而 AppConfig 有 12 个可持久化属性——未赋值的两个
         // （AutoCheckUpdates、NavPaneExpandedWidth）会被静默写回默认值：
         //   1. 用户关掉「自动检查更新」→ 之后改任意设置并保存 → 又变回 true（与用户显式选择相反）
         //   2. 用户拖过导航栏宽度 → 保存后弹回 320
@@ -511,6 +598,7 @@ public partial class SettingsViewModel : ObservableObject
         config.UserLevel = UserLevels.DisplayToCode(SelectedUserLevel);
         config.RememberLastSession = RememberLastSession;
         config.UpdateSource = UpdateSourceDisplayToCode(SelectedUpdateSource);
+        config.NotificationsEnabled = NotificationsEnabled;
         _config.Save(config);
 
         if (themeChanged || levelChanged)
@@ -643,6 +731,30 @@ public partial class SettingsViewModel : ObservableObject
         {
             var cfg = _config.Load();
             cfg.AutoCheckUpdates = value;
+            _config.Save(cfg);
+        }
+        catch
+        {
+            // 同上：写穿失败不阻塞 UI
+        }
+    }
+
+    /// <summary>
+    /// 系统通知开关即改即存（语义同自动检查更新）：同步写穿 config，
+    /// 并立即驱动 <see cref="NotificationService.Enabled"/>，使本次运行即时生效（无需重启）。
+    /// </summary>
+    partial void OnNotificationsEnabledChanged(bool value)
+    {
+        if (!_initialized)
+        {
+            return;
+        }
+
+        NotificationService.Enabled = value;
+        try
+        {
+            var cfg = _config.Load();
+            cfg.NotificationsEnabled = value;
             _config.Save(cfg);
         }
         catch

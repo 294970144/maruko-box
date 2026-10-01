@@ -45,7 +45,7 @@ if ($bundleFfmpeg -and -not (Test-Path -LiteralPath $FfmpegZip)) {
 & dotnet publish $csproj -c Release `
     -p:WindowsPackageType=None -p:EnableMsixTooling=false `
     -p:WindowsAppSDKSelfContained=true --self-contained true -r win-x64 `
-    -p:PublishTrimmed=false -o $PayloadDir *>&1
+    -p:PublishTrimmed=false --disable-build-servers -o $PayloadDir *>&1
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish 失败，退出码 $LASTEXITCODE" }
 
 if ($bundleFfmpeg) {

@@ -729,7 +729,24 @@ public partial class VideoViewModel : ObservableObject
             // 用户点开只能看到「失败」却永远看不到失败原因。
             if (!Queue.Any(i => i.HasError))
             {
-                StatusText = Queue.All(i => i.IsDone) ? "全部完成" : "编码结束";
+                var allDone = Queue.All(i => i.IsDone);
+                StatusText = allDone ? "全部完成" : "编码结束";
+
+                // 【通知】批量全部成功完成时弹出系统通知（应用最小化 / 后台也能看到）。
+                // 仅在确有文件且全部成功时通知，避免空队列 / 部分跳过误报。
+                if (allDone && Queue.Count > 0)
+                {
+                    _ = NotificationService.ShowTaskCompletedAsync(
+                        "编码完成", $"已处理 {Queue.Count} 个文件，全部成功。")
+                        .ContinueWith(t =>
+                        {
+                            if (t.Status == TaskStatus.RanToCompletion &&
+                                t.Result != NotificationSendResult.Submitted)
+                            {
+                                App.LogInfo($"视频完成通知未提交：{t.Result}");
+                            }
+                        }, TaskScheduler.Default);
+                }
             }
         }
 

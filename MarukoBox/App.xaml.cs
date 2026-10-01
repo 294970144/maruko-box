@@ -8,6 +8,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using MarukoBox.Services;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -220,6 +221,10 @@ public partial class App : Application
             LogCrash(e.Exception, "TaskScheduler.UnobservedTaskException");
             e.SetObserved(); // 标记为已观察，避免进程因未观察任务异常而终止
         };
+
+        // 退出兜底：进程退出时注销通知通道（释放 COM 服务器）。
+        // 与 App.Shutdown 中的注销互为备份；Uninitialize 内部对已注销状态幂等。
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => NotificationService.Uninitialize();
     }
 
     private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
@@ -247,6 +252,9 @@ public partial class App : Application
 
         // ② 正常关窗：关掉最后一个窗口后消息循环结束、进程自然退出（Closed 再保存一次，无害）。
         (Window as MainWindow)?.Close();
+
+        // ②.5 注销系统通知通道，释放 COM 服务器（不抛异常，失败忽略）。
+        NotificationService.Uninitialize();
 
         // ③ 兜底：若消息循环未如预期终止（unpackaged 生命周期属未定义区域），
         //    显式终止进程——「编码完成后退出」绝不能成为摆设。
@@ -327,6 +335,20 @@ public partial class App : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
+        // 注册系统通知通道（unpackaged：直接 Register，无需改 manifest）。
+        // 失败不阻断启动；注册逻辑内部已全量 try/catch。
+        NotificationService.Initialize();
+
+        // 应用「系统通知」开关：默认开启，关闭则完全不发送（设置页可即时切换）。
+        try
+        {
+            NotificationService.Enabled = AppServices.Config.Load().NotificationsEnabled;
+        }
+        catch
+        {
+            // 读取失败则保留默认开启
+        }
+
         Window = new MainWindow();
         DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
 

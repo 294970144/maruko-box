@@ -2,6 +2,32 @@ using MarukoBox.Services;
 using MarukoBox.Models;
 using System.Diagnostics;
 
+// ---------- 通知发送结果策略回归：不依赖 Windows Shell 的纯逻辑校验 ----------
+Console.WriteLine("=== 通知发送结果策略校验 ===");
+var notificationPolicyCases = new[]
+{
+    (Available: false, Queued: false, Shown: false, Expected: NotificationSendResult.NotReady),
+    (Available: true, Queued: false, Shown: false, Expected: NotificationSendResult.QueueRejected),
+    (Available: true, Queued: true, Shown: false, Expected: NotificationSendResult.Failed),
+    (Available: true, Queued: true, Shown: true, Expected: NotificationSendResult.Submitted),
+};
+var notificationPolicyFailures = 0;
+foreach (var c in notificationPolicyCases)
+{
+    var actual = NotificationSendResultPolicy.Resolve(c.Available, c.Queued, c.Shown);
+    var pass = actual == c.Expected;
+    if (!pass) notificationPolicyFailures++;
+    Console.WriteLine($"  {(pass ? "PASS" : "FAIL")} available={c.Available} queued={c.Queued} shown={c.Shown} result={actual}");
+}
+if (notificationPolicyFailures > 0)
+{
+    return 1;
+}
+if (args.Any(a => a.Equals("notification", StringComparison.OrdinalIgnoreCase)))
+{
+    return 0;
+}
+
 // 场景开关：`update` = 更新链路冒烟（软件更新查询 + NVENC 门槛矩阵 + ffmpeg 更新）；
 // `recover` = 更新中断自愈冒烟；默认 = 编码冒烟
 if (args.Any(a => a.Equals("update", StringComparison.OrdinalIgnoreCase)))
