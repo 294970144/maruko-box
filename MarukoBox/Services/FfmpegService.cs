@@ -967,9 +967,18 @@ public class FfmpegService : IFfmpegService
             }
 
             var ext = GetStreamExtension(s);
+            // 【C1 修复】-c copy 对两类字幕轨必败：落 .srt 的流（mov_text 等）srt muxer 只认 subrip 编码；
+            // dvd_subtitle 的 .sub 后缀无对应 muxer。前者转码 subrip，后者强制落 .mkv 保持 copy。
+            var subCodec = s.Codec.ToLowerInvariant();
+            if (s.Type == StreamType.Subtitle && subCodec == "dvd_subtitle")
+            {
+                ext = ".mkv";
+            }
+
+            var subArgs = s.Type == StreamType.Subtitle && ext == ".srt" ? "-c:s subrip " : string.Empty;
             var outName = $"{Path.GetFileNameWithoutExtension(source)}_s{s.Index}{ext}";
             var outPath = Path.Combine(outputDir, outName);
-            var args = $"-i \"{source}\" -map 0:{s.Index} -c copy \"{outPath}\" -y";
+            var args = $"-i \"{source}\" -map 0:{s.Index} -c copy {subArgs}\"{outPath}\" -y";
 
             agg.StatusMessage = $"抽取流 {s.Index}（{s.TypeLabel}） {done + 1}/{total}";
             progress.Report(agg);
@@ -1313,9 +1322,14 @@ public class FfmpegService : IFfmpegService
             throw new InvalidOperationException("字幕文件不存在，请重新选择。");
         }
 
-        // 视频与字幕合并：复制视频全部流 + 字幕流；字幕按输出容器由 ffmpeg 自动选编码器。
+        // 视频与字幕合并：视音频流直接复制；字幕按输出容器选编码器——
+        // 【C1 修复】mp4/mov 的 muxer 没有 subrip tag，-c copy 必报
+        // "Could not find tag for codec subrip"，需转 mov_text；mkv 等用 srt。
+        var subCodec = Path.GetExtension(outputVideo).ToLowerInvariant() is ".mp4" or ".mov" or ".m4v"
+            ? "mov_text"
+            : "srt";
         var sb = new StringBuilder(
-            $"-i \"{videoPath}\" -i \"{subtitlePath}\" -map 0 -map 1 -c copy -y \"{outputVideo}\"");
+            $"-i \"{videoPath}\" -i \"{subtitlePath}\" -map 0 -map 1 -c copy -c:s {subCodec} -y \"{outputVideo}\"");
 
         return await RunFfmpegCoreAsync(
             ffmpegPath, sb.ToString(), Path.GetFileName(outputVideo), progress, ct);
