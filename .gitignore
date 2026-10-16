@@ -54,10 +54,14 @@ build_log.txt
 # --- IDE 本地配置 / 本机 agent 工具目录（机器绑定，不入库）---
 .vscode/
 .codex/
+.codebuddy/
 .aoci/
 aoci.txt
 aoci.meta.txt
 aoci.code.txt
+
+# --- 交接状态记录（本地保留，不入库）---
+PROJECT_STATE.md
 
 # --- 安装器脚本与发行说明（Master 2026-10-02 指定整目录排除；本地保留）---
 Installer-Inno/
