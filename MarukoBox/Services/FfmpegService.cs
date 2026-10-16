@@ -1625,12 +1625,16 @@ public class FfmpegService : IFfmpegService
             throw new InvalidOperationException("源视频不存在，请重新选择。");
         }
 
+        // 【C3 修复】-ss 前置后 out_time_us 从 0 起算，进度分母必须用区间时长：
+        // 此前不传 totalOverride，回退到 stderr 解析的全片时长，进度条最多走到 区间/全片。
+        // 该形参自 N4 起存在但无调用方传值，此处落实而非删除。
         return await RunFfmpegCoreAsync(
             ffmpegPath,
             BuildTrimArguments(request, gpuInfo),
             Path.GetFileName(request.OutputPath),
             progress,
-            ct);
+            ct,
+            totalOverride: request.Duration);
     }
 
     /// <inheritdoc/>
