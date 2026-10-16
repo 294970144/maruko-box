@@ -218,9 +218,20 @@ public sealed class ConfigService : IConfigService
                 config = JsonSerializer.Deserialize<AppConfig>(json) ?? CreateDefault();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 配置损坏时回退到默认，避免应用崩溃。
+            // 【C9 修复】配置损坏（含写入中断留下的截断 JSON）不再静默归零：
+            // 坏文件改名留存并记日志，用户可据此找回原设置，再回退默认。
+            try
+            {
+                File.Move(ConfigPath, $"{ConfigPath}.corrupt-{DateTime.Now:yyyyMMdd-HHmmss}", overwrite: true);
+            }
+            catch
+            {
+                // 留存失败不阻塞回退
+            }
+
+            App.LogCrash(ex, "ConfigService.Load: 配置损坏，已留存并回退默认");
             config = CreateDefault();
         }
 
@@ -241,7 +252,7 @@ public sealed class ConfigService : IConfigService
         {
             Directory.CreateDirectory(ConfigDirectory);
             var json = JsonSerializer.Serialize(config, JsonOptions);
-            File.WriteAllText(ConfigPath, json);
+            AtomicWrite(ConfigPath, json);
         }
         catch (Exception ex)
         {
@@ -296,12 +307,23 @@ public sealed class ConfigService : IConfigService
         {
             Directory.CreateDirectory(ConfigDirectory);
             var json = JsonSerializer.Serialize(state, JsonOptions);
-            File.WriteAllText(SessionPath, json);
+            AtomicWrite(SessionPath, json);
         }
         catch
         {
             // 静默忽略
         }
+    }
+
+    /// <summary>
+    /// 【C9 修复】原子写：先写同目录临时文件，再 Move 覆写目标。
+    /// 避免写入过程被中断（关机 / 强杀）时目标文件留下截断内容，导致下次加载反序列化失败。
+    /// </summary>
+    private static void AtomicWrite(string path, string content)
+    {
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, content);
+        File.Move(tmp, path, overwrite: true);
     }
 
     /// <summary>构造一份带合理默认值的配置。</summary>
