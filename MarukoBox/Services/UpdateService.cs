@@ -150,7 +150,9 @@ public sealed partial class UpdateService : IUpdateService
     /// </summary>
     private const int MirrorProbeLimit = 15;
 
-    private readonly HttpClient _http = new()
+    // 【C4 修复】关闭自动重定向：HttpClient 内置的自动跟随无法校验 Location 主机，
+    // 是发布源被污染后把下载引向恶意站点的入口；重定向统一走 SendGuardedAsync 逐跳过白名单。
+    private readonly HttpClient _http = new(new SocketsHttpHandler { AllowAutoRedirect = false })
     {
         // 92MB 解压体 / 34MB 压缩包 / 97MB 安装包在慢速网络下需要足够长的下载窗口
         Timeout = TimeSpan.FromMinutes(10)
@@ -162,7 +164,8 @@ public sealed partial class UpdateService : IUpdateService
     /// 与 <see cref="_http"/>（大文件下载：34MB zip / 97MB 安装包）分开——
     /// 不能直接给 _http 设上限，否则 ffmpeg zip 下载会被 10MB 上限误杀。
     /// </summary>
-    private readonly HttpClient _metaHttp = new()
+    // 【C4 修复】同 _http：关闭自动重定向，重定向逐跳过白名单。
+    private readonly HttpClient _metaHttp = new(new SocketsHttpHandler { AllowAutoRedirect = false })
     {
         Timeout = TimeSpan.FromSeconds(60),
         MaxResponseContentBufferSize = 10 * 1024 * 1024
@@ -560,10 +563,8 @@ public sealed partial class UpdateService : IUpdateService
     {
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Head, url);
-            request.Headers.UserAgent.ParseAdd($"MarukoBox/{GetAppVersionStatic()}");
-            using var response = await _metaHttp
-                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            // 【C4 修复】统一过白名单 + 重定向守卫（GET + 只读响应头，与原 HEAD 语义等价）
+            using var response = await SendGuardedAsync(_metaHttp, url, ct).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -909,6 +910,71 @@ public sealed partial class UpdateService : IUpdateService
         }
     }
 
+    // ---------- 下载信任边界（C4 修复第一阶段） ----------
+
+    /// <summary>
+    /// 【C4 修复】下载 URL 受信主机：GitHub（API / 仓库 / 资产 CDN objects.githubusercontent.com，
+    /// 以及未来同族 *.githubusercontent.com）、Gitee（API / 仓库 / attach_files 附件，实测同域重定向）、
+    /// 兰州大学 ffmpeg 镜像。远程响应带回的 URL（Release JSON 的 browser_download_url、
+    /// 重定向 Location）一律先过 <see cref="EnsureTrustedDownloadUrl"/>。
+    /// </summary>
+    private static bool IsTrustedDownloadUrl(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && uri.Scheme == Uri.UriSchemeHttps
+        && (uri.Host is "github.com" or "api.github.com" or "gitee.com" or "mirror.lzu.edu.cn"
+            || uri.Host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>【C4 修复】拒绝白名单外的下载地址（http 明文或未受信主机）。</summary>
+    private static void EnsureTrustedDownloadUrl(string url)
+    {
+        if (!IsTrustedDownloadUrl(url))
+        {
+            throw new InvalidOperationException($"下载地址不在受信来源白名单内，已中止：{url}");
+        }
+    }
+
+    /// <summary>【C4 修复】手动跟随重定向的最大跳数，防无限跳转。</summary>
+    private const int MaxRedirectHops = 5;
+
+    /// <summary>【C4 修复】是否是需要跟随的重定向状态码。</summary>
+    private static bool IsRedirectStatusCode(HttpStatusCode code) =>
+        code is HttpStatusCode.MovedPermanently or HttpStatusCode.Found or HttpStatusCode.SeeOther
+            or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect;
+
+    /// <summary>
+    /// 【C4 修复】带白名单守卫的发送：首跳与每一跳重定向的 Location 都先过
+    /// <see cref="EnsureTrustedDownloadUrl"/>，非受信主机立即中止。
+    /// 替代 HttpClient 的自动重定向——后者无法校验 Location，攻击者污染发布源后
+    /// 一个 302 即可把下载（及其后的解压 / Process.Start）引到任意主机。
+    /// </summary>
+    private static async Task<HttpResponseMessage> SendGuardedAsync(
+        HttpClient client, string url, CancellationToken ct)
+    {
+        var current = url;
+        for (var hop = 0; ; hop++)
+        {
+            EnsureTrustedDownloadUrl(current);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, current);
+            request.Headers.UserAgent.ParseAdd($"MarukoBox/{GetAppVersionStatic()}");
+
+            var response = await client
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+
+            if (hop < MaxRedirectHops
+                && IsRedirectStatusCode(response.StatusCode)
+                && response.Headers.Location is { } location
+                && location.IsAbsoluteUri)
+            {
+                response.Dispose();
+                current = location.OriginalString;
+                continue;
+            }
+
+            return response;
+        }
+    }
+
     /// <summary>
     /// 流式下载文件到目标路径（带进度与取消支持）。
     /// 进度按「已下载 / 总字节」上报：服务器返回 Content-Length 时调用方可显示
@@ -917,10 +983,8 @@ public sealed partial class UpdateService : IUpdateService
     private async Task DownloadFileAsync(string url, string destPath,
         IProgress<DownloadProgress>? progress, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.UserAgent.ParseAdd($"MarukoBox/{GetAppVersionStatic()}");
-        using var response = await _http
-            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        // 【C4 修复】下载地址先过白名单，重定向由 SendGuardedAsync 逐跳校验
+        using var response = await SendGuardedAsync(_http, url, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
         var total = response.Content.Headers.ContentLength ?? -1;
@@ -954,16 +1018,26 @@ public sealed partial class UpdateService : IUpdateService
     /// 尝试取回资源对应的校验值：请求 <c>&lt;资源URL&gt;.sha256</c>，
     /// 并从返回文本里解析出第一段 64 位十六进制（兼容 "<c>hash  filename</c>" 与裸 hash 两种格式）。
     /// </summary>
-    /// <returns>取到则返回小写 hash；资源不存在（404）或解析不出则返回 null。</returns>
+    /// <returns>
+    /// <list type="bullet">
+    /// <item>取到并解析出 hash → 小写 hash 字符串</item>
+    /// <item>资源不存在（404，来源未随包发布校验文件）→ null，由调用方按策略跳过</item>
+    /// </list>
+    /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// 【C4 修复】取回失败（网络错误、非 404 错误码、响应内容解析不出 hash）一律抛异常中止——
+    /// 此前这些情况静默返回 null 等同"无校验"（fail-open），攻击者只需阻断这一个请求
+    /// 即可完全绕过完整性校验。用户取消（OperationCanceledException）按取消语义原样上抛。
+    /// </exception>
     private async Task<string?> TryFetchSha256Async(string assetUrl, CancellationToken ct)
     {
+        // 校验地址与资源同源，但同域也可能被污染；白名单至少挡掉跳域，逐跳校验见 SendGuardedAsync
+        EnsureTrustedDownloadUrl(assetUrl);
         var checksumUrl = assetUrl + ".sha256";
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, checksumUrl);
-            request.Headers.UserAgent.ParseAdd($"MarukoBox/{GetAppVersionStatic()}");
-            using var response = await _metaHttp.SendAsync(request, ct).ConfigureAwait(false);
+            using var response = await SendGuardedAsync(_metaHttp, checksumUrl, ct).ConfigureAwait(false);
 
             // 没有随包发布校验文件时（旧 Release 或镜像源缺失），返回 null 由调用方决定策略
             if (response.StatusCode == HttpStatusCode.NotFound)
@@ -975,13 +1049,24 @@ public sealed partial class UpdateService : IUpdateService
 
             var text = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             var m = Sha256Pattern.Match(text);
-            return m.Success ? m.Value.ToLowerInvariant() : null;
+
+            // 取到了响应但内容里没有合法 hash：错误页 / 被污染的 CDN 响应，
+            // 与「取回失败」同等对待，不能当作「无校验」静默跳过
+            if (!m.Success)
+            {
+                throw new InvalidOperationException("校验文件内容不包含有效的 SHA-256");
+            }
+
+            return m.Value.ToLowerInvariant();
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
         {
-            // 校验文件取不到不应阻断更新流程本身，但必须留下痕迹
-            App.LogInfo($"未能获取校验文件 {checksumUrl}：{ex.GetType().Name}");
-            return null;
+            throw;
+        }
+        catch (Exception ex) when (ex is not InvalidOperationException)
+        {
+            throw new InvalidOperationException(
+                $"校验文件取回失败，已中止更新（{ex.GetType().Name}）：无法验证下载完整性", ex);
         }
     }
 
@@ -993,7 +1078,10 @@ public sealed partial class UpdateService : IUpdateService
     /// <returns>
     /// <list type="bullet">
     /// <item>校验通过 → true</item>
-    /// <item>校验值一致但缺失（Release 未提供 .sha256）→ true，仅记录警告</item>
+    /// <item>来源未提供 .sha256（404，当前发布策略的常态）→ true，仅记录警告并置
+    /// <see cref="LastChecksumMissing"/> 由 UI 显式提示。把「跳过」从静默降级改为
+    /// 默认拒绝 + 用户显式二次确认属 C4 第二阶段（哈希信任锚），待 CI 基建到位后闭环</item>
+    /// <item>取回失败 / 内容非法 → 上游抛异常中止（见 <see cref="TryFetchSha256Async"/>）</item>
     /// <item>不一致 → false（调用方必须删除文件并中止）</item>
     /// </list>
     /// </returns>
