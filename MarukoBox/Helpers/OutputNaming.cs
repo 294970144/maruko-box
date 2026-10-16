@@ -175,7 +175,9 @@ public static class OutputNaming
     public static string Preview(string? rule) => BuildFileName(rule,
         new OutputNamingContext("示例视频.mp4", "encoded", "hevc", "1920x1080", ".mp4"));
 
-    private static bool IsSamePath(string a, string b)
+    /// <summary>判断两个路径是否指向同一文件（完整化后忽略大小写比较）。供自动命名守卫与
+    /// ViewModel 入口的「输出=源文件」拦截共用。</summary>
+    public static bool IsSamePath(string? a, string? b)
     {
         if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
         {

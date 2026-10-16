@@ -493,6 +493,13 @@ public partial class TrimViewModel : ObservableObject
             return;
         }
 
+        // 【C5 修复】手动指定输出路径与源文件相同时，ffmpeg -y 会静默覆写源文件（不可恢复），拒绝执行。
+        if (OutputNaming.IsSamePath(OutputPath, InputPath))
+        {
+            StatusText = "输出路径与源文件相同，会覆盖源文件，请更换输出路径";
+            return;
+        }
+
         IsBusy = true;
         _cts = new CancellationTokenSource();
         StatusText = FastMode ? "快速剪切中…" : "精确剪切中（重新编码画面）…";
