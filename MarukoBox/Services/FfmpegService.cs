@@ -583,7 +583,22 @@ public class FfmpegService : IFfmpegService
         }
         finally
         {
-            try { File.Delete(log); } catch { /* 忽略清理失败 */ }
+            // 【C2 修复】-passlogfile X.log 实际产出的是 X.log-0.log 与 X.log-0.log.mbtree，
+            // 从不生成 X.log 本身——此前 File.Delete(log) 删的是不存在的文件名，passlog 系列
+            // （含上百 MB 的 .mbtree）从未被清理，每次 2-Pass 都永久滞留 %TEMP%。
+            // 改为按前缀通配清理；log 含 Guid，不会误删其它任务的临时文件。
+            try
+            {
+                var prefix = Path.GetFileName(log);
+                foreach (var f in Directory.GetFiles(Path.GetTempPath(), prefix + "*"))
+                {
+                    File.Delete(f);
+                }
+            }
+            catch
+            {
+                // 忽略清理失败
+            }
         }
     }
 
