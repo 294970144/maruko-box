@@ -29,6 +29,10 @@ public sealed partial class TrimPage : Page
     /// <summary>标记"这次位置变化是播放器自己报的"，避免再回头 seek 一次形成抖动。</summary>
     private bool _fromPlayer;
 
+    /// <summary>【C8 修复】导航返回恢复预览时的待定位位置：Source 刚就绪时写 Position 会丢，
+    /// 先存起来，在 MediaOpened 里补定位。</summary>
+    private TimeSpan? _pendingSeek;
+
     public TrimPage()
     {
         InitializeComponent();
@@ -107,10 +111,13 @@ public sealed partial class TrimPage : Page
                 return;
             }
 
-            player.MediaFailed += (_, _) => App.RunOnUiThread(() => ViewModel.MarkPreviewFailed());
+            // 同一 MediaPlayer 实例可能被反复装配（换文件 / 导航返回），先退订再订阅，避免处理器累积
+            player.MediaFailed -= OnPreviewMediaFailed;
+            player.MediaFailed += OnPreviewMediaFailed;
 
             // 视频元数据就绪后才能拿到固有宽高比，此时重新判定起止块挂两侧还是回下方
-            player.MediaOpened += (_, _) => App.RunOnUiThread(UpdateResponsiveLayout);
+            player.MediaOpened -= OnPreviewMediaOpened;
+            player.MediaOpened += OnPreviewMediaOpened;
 
             player.PlaybackSession.PositionChanged -= PlaybackSession_PositionChanged;
             player.PlaybackSession.PositionChanged += PlaybackSession_PositionChanged;
@@ -128,6 +135,25 @@ public sealed partial class TrimPage : Page
     /// <summary>播放/暂停按钮切换图标（Symbol 枚举自带 Play / Pause，语义由 ToolTip 承担）。</summary>
     private void SetPlayPauseIcon(bool playing) =>
         BtnPlayPause.Content = new SymbolIcon(playing ? Symbol.Pause : Symbol.Play);
+
+    private void OnPreviewMediaFailed(MediaPlayer sender, MediaPlayerFailedEventArgs args) =>
+        App.RunOnUiThread(() => ViewModel.MarkPreviewFailed());
+
+    private void OnPreviewMediaOpened(MediaPlayer sender, object args)
+    {
+        App.RunOnUiThread(() =>
+        {
+            UpdateResponsiveLayout();
+
+            // 【C8 修复】导航返回的恢复定位：Source 就绪前写 Position 会丢，这里补上；
+            // PositionChanged 会顺势同步 ViewModel 与时间轴。
+            if (_pendingSeek is { } t)
+            {
+                _pendingSeek = null;
+                Session?.Position = t;
+            }
+        });
+    }
 
     private void PlaybackSession_PositionChanged(MediaPlaybackSession sender, object args)
     {
@@ -528,5 +554,22 @@ public sealed partial class TrimPage : Page
         }
 
         MarukoBox.MainWindow.SaveSessionIfEnabled();
+    }
+
+    /// <summary>
+    /// 进入裁剪页。页面 <c>NavigationCacheMode="Required"</c>，实例被缓存复用：
+    /// 【C8 修复】OnNavigatedFrom 置空了播放源，此前没有对应的恢复逻辑，
+    /// 导航返回后预览黑屏、播放/暂停/空格键全部失效，只能重选文件。
+    /// </summary>
+    protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+
+        if (ViewModel.HasVideo && !ViewModel.PreviewFailed && !ViewModel.IsBusy
+            && PreviewPlayer.Source is null && !string.IsNullOrWhiteSpace(ViewModel.InputPath))
+        {
+            _pendingSeek = ViewModel.Position;
+            SetupPlayer(ViewModel.InputPath);
+        }
     }
 }
