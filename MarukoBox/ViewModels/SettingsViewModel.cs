@@ -988,17 +988,27 @@ public partial class SettingsViewModel : ObservableObject
             }));
 
             var installer = await _update.DownloadAppInstallerAsync(
-                latest.DownloadUrl, latest.Version, progress);
+                latest.DownloadUrl, latest.Version, progress, expectedSha256: latest.ExpectedSha256);
 
-            // 【N8】安装包来源未提供 .sha256 时显式告知（CN 源常态），状态升为警告级
+            // 【C4 第二阶段】无任何可用校验值时不再静默降级：执行下载来的 exe 之前
+            // 必须得到用户显式确认，否则删除安装包并中止。
             if (_update.LastChecksumMissing)
             {
-                SetUpdateStatus($"安装包已就绪（注意：此来源未提供校验文件，已跳过 SHA-256 校验），正在启动安装程序（{latest.Tag}）…",
+                var proceed = await ConfirmUnverifiedInstallAsync(latest.Tag);
+                if (!proceed)
+                {
+                    try { File.Delete(installer); } catch { /* 删除失败不阻塞取消流程 */ }
+                    SetUpdateStatus("已取消安装（安装包未经校验，下载文件已删除）", InfoBarSeverity.Informational);
+                    return;
+                }
+
+                SetUpdateStatus($"安装包未经校验，按你的选择继续启动安装程序（{latest.Tag}）…",
                     InfoBarSeverity.Warning);
             }
             else
             {
-                SetUpdateStatus($"安装包已就绪，正在启动安装程序（{latest.Tag}）…", InfoBarSeverity.Informational);
+                SetUpdateStatus($"安装包已就绪（SHA-256 校验通过），正在启动安装程序（{latest.Tag}）…",
+                    InfoBarSeverity.Informational);
             }
             await Task.Delay(600); // 让用户看到状态再退出
 
@@ -1054,6 +1064,33 @@ public partial class SettingsViewModel : ObservableObject
             // 窗口还没就绪就会自动开始下载并静默执行安装包，方向完全反了。
             // 没有明确的「用户同意」就不该动用户的系统。
             App.LogCrash(ex, "SettingsViewModel.ConfirmAppUpdateAsync");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 【C4 第二阶段】安装包无任何可用校验值（Release 正文未内嵌哈希、来源也未提供旁挂 .sha256）时，
+    /// 启动安装程序前的显式二次确认——拿不到明确同意就不动用户的系统。
+    /// </summary>
+    private async Task<bool> ConfirmUnverifiedInstallAsync(string newTag)
+    {
+        try
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = App.Window.Content.XamlRoot,
+                Title = "无法校验安装包",
+                Content = $"{newTag} 的发布来源没有提供可验证的 SHA-256 哈希，安装包完整性无法确认，继续安装存在安全风险。\n\n仍要启动安装程序吗？",
+                PrimaryButtonText = "仍要安装",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Close
+            };
+            return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        }
+        catch (Exception ex)
+        {
+            // 与其它确认弹窗一致：拿不到明确同意就不动系统
+            App.LogCrash(ex, "SettingsViewModel.ConfirmUnverifiedInstallAsync");
             return false;
         }
     }
@@ -1180,7 +1217,8 @@ public partial class SettingsViewModel : ObservableObject
                 Title = "发现新版本",
                 Content = $"当前内置 ffmpeg：{(string.IsNullOrEmpty(localVersion) ? "未安装" : localVersion)}\n" +
                           $"最新版本：{newVersion}\n\n" +
-                          $"是否下载并安装？（{sizePart}，安装期间请勿进行编码任务）",
+                          $"是否下载并安装？（{sizePart}，安装期间请勿进行编码任务）\n\n" +
+                          "注意：ffmpeg 发布源不提供 SHA-256 校验文件，所安装的二进制未经校验。",
                 PrimaryButtonText = "下载并安装",
                 CloseButtonText = "取消",
                 DefaultButton = ContentDialogButton.Primary
@@ -1331,13 +1369,14 @@ public partial class SettingsViewModel : ObservableObject
             {
                 XamlRoot = App.Window.Content.XamlRoot,
                 Title = "安装此版本",
-                Content = row.IsCompatible
+                Content = (row.IsCompatible
                     ? $"将下载并安装 jellyfin-ffmpeg {row.Tag}（{row.SizeText}）。\n\n" +
                       "安装期间请勿进行编码任务。"
                     : $"将下载并安装 jellyfin-ffmpeg {row.Tag}（{row.SizeText}）。\n\n" +
                       $"⚠ 本机当前 {row.CompatibleText}\n" +
                       "强制安装后 NVENC 硬件编码可能不可用，但软件编码器照常使用。\n\n" +
-                      "是否继续？",
+                      "是否继续？")
+                    + "\n\n注意：ffmpeg 发布源不提供 SHA-256 校验文件，所安装的二进制未经校验。",
                 PrimaryButtonText = "继续安装",
                 CloseButtonText = "取消",
                 DefaultButton = ContentDialogButton.Primary

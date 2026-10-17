@@ -12,7 +12,9 @@ namespace MarukoBox.Services;
 /// <summary>软件自身（MarukoBox）在 GitHub 上的最新 Release 信息。</summary>
 /// <param name="SizeBytes">安装包资产字节数；GitHub 取自资产 size 字段，CN 源经 HEAD 探测
 /// Content-Length 获得（Gitee API 实测不返回资产大小），探测失败记 0（调用方按未知处理）。</param>
-public record AppReleaseInfo(string Tag, string Version, string DownloadUrl, long SizeBytes = 0);
+/// <param name="ExpectedSha256">【C4 第二阶段】Release 正文内嵌的安装包期望哈希；null 表示无可用锚。</param>
+public record AppReleaseInfo(string Tag, string Version, string DownloadUrl, long SizeBytes = 0,
+    string? ExpectedSha256 = null);
 
 /// <summary>
 /// 下载进度快照（已下载字节数 / 总字节数）。
@@ -114,8 +116,10 @@ public interface IUpdateService
     bool LastChecksumMissing { get; }
 
     /// <summary>下载软件安装包到临时目录并返回完整路径（不自动运行，由调用方启动安装器）。</summary>
+    /// <param name="expectedSha256">【C4 第二阶段】Release 正文内嵌的期望哈希；null 时回退旁挂 .sha256。</param>
     Task<string> DownloadAppInstallerAsync(string downloadUrl, string version,
-        IProgress<DownloadProgress>? progress = null, CancellationToken ct = default);
+        IProgress<DownloadProgress>? progress = null, CancellationToken ct = default,
+        string? expectedSha256 = null);
 }
 
 /// <inheritdoc cref="IUpdateService"/>
@@ -551,7 +555,13 @@ public sealed partial class UpdateService : IUpdateService
             assetSize = await ProbeContentLengthAsync(url, ct).ConfigureAwait(false);
         }
 
-        return new AppReleaseInfo(rawTag, version, url, assetSize);
+        // 【C4 第二阶段】期望哈希改从 Release 正文取得：当前发布策略不上传旁挂 .sha256，
+        // 与资产同源的旁挂校验长期空转；正文内嵌哈希是独立于资产 CDN 的信任锚
+        // （发布账号级妥协仍可篡改正文，留待内嵌公钥验签收口）。
+        var expectedSha256 = ExtractInstallerHash(
+            doc.RootElement.TryGetProperty("body", out var bodyEl) ? bodyEl.GetString() : null);
+
+        return new AppReleaseInfo(rawTag, version, url, assetSize, expectedSha256);
     }
 
     /// <summary>
@@ -836,7 +846,8 @@ public sealed partial class UpdateService : IUpdateService
 
     /// <inheritdoc/>
     public async Task<string> DownloadAppInstallerAsync(string downloadUrl, string version,
-        IProgress<DownloadProgress>? progress = null, CancellationToken ct = default)
+        IProgress<DownloadProgress>? progress = null, CancellationToken ct = default,
+        string? expectedSha256 = null)
     {
         // v1.4.1 安全加固（S2）：version 直接来自 GitHub 返回的 tag_name，
         // 旧实现只剥掉 v 前缀就拼进文件名，tag 若为 "..\..\Startup\evil"
@@ -865,7 +876,7 @@ public sealed partial class UpdateService : IUpdateService
         // v1.7.1（S1）：执行下载来的 exe 之前必须校验 SHA-256。
         // 只查「非空」是不够的——HTTPS 保护的是传输过程，挡不住发布仓库或镜像源被污染，
         // 而这一步之后就是 Process.Start，等于替攻击者执行程序。
-        if (!await VerifyDownloadAsync(downloadUrl, dest, ct).ConfigureAwait(false))
+        if (!await VerifyDownloadAsync(downloadUrl, dest, ct, expectedSha256).ConfigureAwait(false))
         {
             TryCleanup(dest);
             throw new InvalidOperationException(
@@ -1073,21 +1084,40 @@ public sealed partial class UpdateService : IUpdateService
     private static readonly Regex Sha256Pattern = new(@"\b[0-9a-fA-F]{64}\b", RegexOptions.Compiled);
 
     /// <summary>
+    /// 【C4 第二阶段】从 Release 正文提取安装包期望 SHA-256。
+    /// 发布约定：发行说明含一行「安装包 SHA-256: &lt;64 位十六进制&gt;」。
+    /// 取不到返回 null（回退旁挂 .sha256；再取不到进入「显式确认后安装」流程）。
+    /// </summary>
+    private static string? ExtractInstallerHash(string? releaseBody)
+    {
+        if (string.IsNullOrEmpty(releaseBody))
+        {
+            return null;
+        }
+
+        var m = Regex.Match(releaseBody, @"安装包\s*SHA-?256\s*[:：]\s*([0-9a-fA-F]{64})",
+            RegexOptions.IgnoreCase);
+        return m.Success ? m.Groups[1].Value.ToLowerInvariant() : null;
+    }
+
+    /// <summary>
     /// 校验已下载文件的 SHA-256 与随包发布的一致。
     /// </summary>
     /// <returns>
     /// <list type="bullet">
     /// <item>校验通过 → true</item>
-    /// <item>来源未提供 .sha256（404，当前发布策略的常态）→ true，仅记录警告并置
-    /// <see cref="LastChecksumMissing"/> 由 UI 显式提示。把「跳过」从静默降级改为
-    /// 默认拒绝 + 用户显式二次确认属 C4 第二阶段（哈希信任锚），待 CI 基建到位后闭环</item>
+    /// <item>无任何可用校验值（Release 正文未内嵌哈希且无旁挂 .sha256）→ true，仅记录警告并置
+    /// <see cref="LastChecksumMissing"/> 由 UI 显式二次确认后才继续执行</item>
     /// <item>取回失败 / 内容非法 → 上游抛异常中止（见 <see cref="TryFetchSha256Async"/>）</item>
     /// <item>不一致 → false（调用方必须删除文件并中止）</item>
     /// </list>
     /// </returns>
-    private async Task<bool> VerifyDownloadAsync(string url, string localPath, CancellationToken ct)
+    private async Task<bool> VerifyDownloadAsync(string url, string localPath, CancellationToken ct,
+        string? expectedFromBody = null)
     {
-        var expected = await TryFetchSha256Async(url, ct).ConfigureAwait(false);
+        // 【C4 第二阶段】优先用 Release 正文内嵌哈希（独立于资产同源的信任锚）；
+        // 正文没有时再尝试与资产同源的旁挂 .sha256。
+        var expected = expectedFromBody ?? await TryFetchSha256Async(url, ct).ConfigureAwait(false);
         var actual = ComputeSha256(localPath);
 
         if (expected is null)
