@@ -195,6 +195,11 @@ public partial class AudioViewModel : ObservableObject
         _cts = new CancellationTokenSource();
         StatusText = "开始转码…";
 
+        // 【C6 修复】同视频页：取消是用户主动行为而非失败，置标志让 finally 保留「已取消」；
+        // current 供异常路径标记失败项。
+        var cancelled = false;
+        EncodeItem? current = null;
+
         try
         {
             foreach (var item in Queue.ToList())
@@ -209,6 +214,7 @@ public partial class AudioViewModel : ObservableObject
                 item.HasError = false;
                 item.StatusText = "转码中";
                 item.Percent = 0;
+                current = item;
 
                 var ext = preset.Codec switch
                 {
@@ -241,9 +247,29 @@ public partial class AudioViewModel : ObservableObject
                     });
                 });
 
-                var ok = await _ffmpeg.TranscodeAudioAsync(FfmpegPath, item.InputPath, outPath, preset, prog, _cts.Token);
+                bool ok;
+                try
+                {
+                    ok = await _ffmpeg.TranscodeAudioAsync(FfmpegPath, item.InputPath, outPath, preset, prog, _cts.Token);
+                }
+                finally
+                {
+                    // 【C6 修复】异常/取消路径同样复位当前项；取消时标记「已取消」。
+                    // 此前音频页缺 await 后的取消判断（视频页 L693 起就有），
+                    // 正常取消被当成失败：HasError=true /「失败」。
+                    item.IsEncoding = false;
+                    if (_cts.IsCancellationRequested)
+                    {
+                        item.StatusText = "已取消";
+                    }
+                }
 
-                item.IsEncoding = false;
+                if (_cts.IsCancellationRequested)
+                {
+                    cancelled = true;
+                    break;
+                }
+
                 item.IsDone = ok;
                 item.HasError = !ok;
                 item.Percent = ok ? 100 : item.Percent;
@@ -256,12 +282,21 @@ public partial class AudioViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
+            // 【C6 修复】同视频页：取消不是错误，置标志保留「已取消」
+            cancelled = true;
             StatusText = "已取消";
         }
         catch (Exception ex)
         {
             App.LogCrash(ex, "AudioViewModel.StartAsync");
             StatusText = $"出错：{ex.Message}";
+
+            // 【C6 修复】异常中断的当前项标记失败，避免队列里留下「转码中」残影
+            if (current is not null)
+            {
+                current.HasError = true;
+                current.StatusText = "失败";
+            }
         }
         finally
         {
@@ -271,7 +306,8 @@ public partial class AudioViewModel : ObservableObject
             // 【v1.4.1 / B3 修复 · 音频页补齐】出错时必须保留 catch 里写入的具体原因。
             // 视频页当年就修过这个：finally 无条件覆盖成「全部完成 / 转码结束」，
             // 用户点开只能看到「失败」却永远看不到为什么失败。音频页原样漏了，这里照抄视频页的写法。
-            if (!Queue.Any(i => i.HasError))
+            // 【C6 修复】「已取消」同理：取消是用户主动行为，不能被成功态文案覆盖。
+            if (!cancelled && !Queue.Any(i => i.HasError))
             {
                 var allDone = Queue.All(i => i.IsDone);
                 StatusText = allDone ? "全部完成" : "转码结束";

@@ -637,6 +637,11 @@ public partial class VideoViewModel : ObservableObject
         IsEncoding = true;
         StatusText = "开始编码…";
 
+        // 【C6 修复】取消是用户主动行为而非失败：置标志让 finally 保留「已取消」，
+        // 不被「编码结束 / 全部完成」覆盖；current 供异常路径标记失败项。
+        var cancelled = false;
+        EncodeItem? current = null;
+
         try
         {
             // 【N3 修复】本批次已分配的输出路径集：同名源（或同一源入队两次）在
@@ -655,6 +660,7 @@ public partial class VideoViewModel : ObservableObject
                 item.HasError = false;
                 item.StatusText = "编码中";
                 item.Percent = 0;
+                current = item;
 
                 Settings.InputPath = item.InputPath;
                 Settings.OutputPath = OutputNaming.DedupeBatch(ComputeOutputPath(item.InputPath), assignedOutputs);
@@ -688,16 +694,28 @@ public partial class VideoViewModel : ObservableObject
                     });
                 });
 
-                var ok = await AppServices.Ffmpeg.EncodeAsync(Settings, GpuInfo, prog, _cts.Token);
+                bool ok;
+                try
+                {
+                    ok = await AppServices.Ffmpeg.EncodeAsync(Settings, GpuInfo, prog, _cts.Token);
+                }
+                finally
+                {
+                    // 【C6 修复】异常/取消路径也必须复位当前项：此前只有正常完成路径复位，
+                    // 取消或抛错时 item 永远停在「编码中」，队列卡死无法继续。
+                    item.IsEncoding = false;
+                    if (_cts.IsCancellationRequested)
+                    {
+                        item.StatusText = "已取消";
+                    }
+                }
 
                 if (_cts.IsCancellationRequested)
                 {
-                    item.StatusText = "已取消";
-                    item.IsEncoding = false;
+                    cancelled = true;
                     break;
                 }
 
-                item.IsEncoding = false;
                 item.IsDone = ok;
                 item.HasError = !ok;
                 item.Percent = ok ? 100 : item.Percent;
@@ -710,6 +728,8 @@ public partial class VideoViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
+            // 【C6 修复】取消不是错误：置标志，finally 保留「已取消」
+            cancelled = true;
             StatusText = "已取消";
         }
         catch (Exception ex)
@@ -717,6 +737,13 @@ public partial class VideoViewModel : ObservableObject
             // 任何异常都显式呈现给用户，而不是让进程崩溃。
             App.LogCrash(ex, "VideoViewModel.StartAsync");
             StatusText = $"编码出错：{ex.Message}";
+
+            // 【C6 修复】异常中断的当前项标记失败，避免队列里留下「编码中」残影
+            if (current is not null)
+            {
+                current.HasError = true;
+                current.StatusText = "失败";
+            }
         }
         finally
         {
@@ -727,7 +754,8 @@ public partial class VideoViewModel : ObservableObject
             // 【v1.4.1 / B3 修复】出错时必须保留 catch 里写入的具体原因。
             // 此前 finally 无条件覆盖成「全部完成 / 编码结束」，
             // 用户点开只能看到「失败」却永远看不到失败原因。
-            if (!Queue.Any(i => i.HasError))
+            // 【C6 修复】「已取消」同理：取消是用户主动行为，不能被成功态文案覆盖。
+            if (!cancelled && !Queue.Any(i => i.HasError))
             {
                 var allDone = Queue.All(i => i.IsDone);
                 StatusText = allDone ? "全部完成" : "编码结束";
