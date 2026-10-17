@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Navigation;
 using System;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using MarukoBox.Services;
 
@@ -330,11 +331,34 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// 【C7 修复】单实例互斥体：进程生命周期内持有（不 Dispose，进程退出自动释放）。
+    /// 双开时两个实例会无锁并发读写 config.json/session.json，且可能并发替换内置
+    /// ffmpeg（InstallGate 只是进程内信号量，跨进程不设防）。第二实例直接退出；
+    /// 激活既有窗口需 AppLifecycle 重定向桥接，unpackaged 下留待后续。
+    /// </summary>
+    private static Mutex? _singleInstanceMutex;
+
+    /// <summary>
     /// Invoked when the application is launched.
     /// </summary>
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
+        // 【C7 修复】单实例守卫（说明见 _singleInstanceMutex）。守卫自身失败不阻断启动。
+        try
+        {
+            _singleInstanceMutex = new Mutex(true, "MarukoBox.SingleInstance", out var isFirstInstance);
+            if (!isFirstInstance)
+            {
+                LogInfo("检测到已有实例在运行，第二实例退出");
+                Environment.Exit(0);
+            }
+        }
+        catch
+        {
+            // 互斥体创建失败（同名冲突/权限）时放行启动，不因守卫本身阻断应用
+        }
+
         // 注册系统通知通道（unpackaged：直接 Register，无需改 manifest）。
         // 失败不阻断启动；注册逻辑内部已全量 try/catch。
         NotificationService.Initialize();

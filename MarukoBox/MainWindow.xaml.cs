@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -9,6 +10,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 using Windows.UI;
+using MarukoBox.Helpers;
 using MarukoBox.Models;
 using MarukoBox.Pages;
 using MarukoBox.Services;
@@ -40,8 +42,95 @@ public sealed partial class MainWindow : Window
             presenter.PreferredMinimumHeight = MinWindowHeight;
         }
 
+        // 【C7 修复】关窗拦截：有编码/转码任务在跑时先问用户，避免 ffmpeg 子进程
+        // 在主进程退出后继续跑完并写盘（见 OnWindowClosing）。
+        // 注意：Closing 事件挂在 AppWindow 上（AppWindowClosingEventArgs 带 Cancel），
+        // OverlappedPresenter 只管布局、没有 Closing。
+        AppWindow.Closing += OnWindowClosing;
+
         // 导航窗格宽度/紧凑态恢复（config 独立字段，始终记忆，不受「保持习惯」开关影响）
         ApplyNavPaneStateFromConfig();
+    }
+
+    /// <summary>【C7 修复】用户已确认「取消任务并退出」：放行下一次关窗（含 App.Shutdown 链）。</summary>
+    private bool _closeApproved;
+
+    /// <summary>【C7 修复】关窗等待任务收敛的上限；超时也放行——进程退出会连带终止子进程。</summary>
+    private static readonly TimeSpan CloseWaitTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// 【C7 修复】关窗拦截。此前主进程退出（消息循环结束 / <c>Environment.Exit</c>）不会等待
+    /// ffmpeg 子进程：编码途中关窗 → 孤儿进程继续跑完并写盘，用户完全不知输出文件状态。
+    /// <para>
+    /// 有任务在进行时先阻止关闭并询问：「继续等待」则留下应用；「取消任务并退出」则触发各 VM
+    /// 的取消命令（FfmpegService 取消路径 Kill 整个进程树），等任务收敛后走既有退出链
+    /// （Closed 保存会话 → 进程退出）。工具页为秒级探测、设置页下载随进程消亡，均不计入。
+    /// </para>
+    /// </summary>
+    private async void OnWindowClosing(Microsoft.UI.Windowing.AppWindow sender,
+        Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
+    {
+        if (_closeApproved || !IsJobRunning())
+        {
+            return; // 已确认过，或没有进行中的任务：原样放行
+        }
+
+        // 先阻止本次关闭，对话框期间窗口保持打开
+        args.Cancel = true;
+
+        var exitNow = await UiConfirm.ShowAsync(
+            "任务正在进行",
+            "当前有编码/转码任务尚未完成。\n\n「取消任务并退出」会立即停止当前任务并关闭应用；" +
+            "选择「取消」则留在应用内继续等待。",
+            "取消任务并退出");
+
+        if (!exitNow)
+        {
+            return; // 用户选择继续等待
+        }
+
+        App.LogInfo("关窗拦截：用户选择取消任务并退出");
+        CancelActiveJob();
+
+        // 等待任务收敛（取消路径会 Kill 整个 ffmpeg 进程树），带上限防无限挂起
+        var deadline = DateTime.UtcNow + CloseWaitTimeout;
+        while (DateTime.UtcNow < deadline && IsJobRunning())
+        {
+            await Task.Delay(200);
+        }
+
+        _closeApproved = true;
+
+        // 走统一退出链：会话落盘 → 关窗（此次放行）→ 通知通道注销 → 兜底终止进程
+        App.Shutdown();
+    }
+
+    /// <summary>【C7 修复】当前页是否有正在运行的任务（工具页为秒级探测，不计入）。</summary>
+    private bool IsJobRunning() => ContentFrame.Content switch
+    {
+        VideoPage v => v.ViewModel.IsEncoding,
+        AudioPage a => a.ViewModel.IsBusy,
+        TrimPage t => t.ViewModel.IsBusy,
+        MuxPage m => m.ViewModel.IsBusy,
+        SubtitlePage s => s.ViewModel.IsBusy,
+        ExtractPage x => x.ViewModel.IsBusy,
+        ImagePage i => i.ViewModel.IsBusy,
+        _ => false
+    };
+
+    /// <summary>【C7 修复】取消当前页正在运行的任务（各 VM 由 [RelayCommand] 生成的 CancelCommand）。</summary>
+    private void CancelActiveJob()
+    {
+        switch (ContentFrame.Content)
+        {
+            case VideoPage v: v.ViewModel.CancelCommand.Execute(null); break;
+            case AudioPage a: a.ViewModel.CancelCommand.Execute(null); break;
+            case TrimPage t: t.ViewModel.CancelCommand.Execute(null); break;
+            case MuxPage m: m.ViewModel.CancelCommand.Execute(null); break;
+            case SubtitlePage s: s.ViewModel.CancelCommand.Execute(null); break;
+            case ExtractPage x: x.ViewModel.CancelCommand.Execute(null); break;
+            case ImagePage i: i.ViewModel.CancelCommand.Execute(null); break;
+        }
     }
 
     /// <summary>
