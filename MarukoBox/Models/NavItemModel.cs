@@ -1,9 +1,15 @@
+// 【Harness 修复】本文件被 Harness 工程（纯 net10.0，无 WinUI 引用）经 Models\*.cs 通配复用。
+// Symbol / Visibility / Pages 页面类型均为 WinUI 专属，用 MARUKO_HARNESS 符号排除，
+// 与 GpuInfo.cs 的既有约定一致；模型纯逻辑成员（Tag / Label / IsFixed / PageType）保留给 Harness。
+
 using System.Collections.Generic;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+#if !MARUKO_HARNESS
 using MarukoBox.Pages;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+#endif
 
 namespace MarukoBox.Models;
 
@@ -30,8 +36,10 @@ public sealed partial class NavItemModel : ObservableObject
     /// <summary>显示文本。</summary>
     public string Label { get; }
 
+#if !MARUKO_HARNESS
     /// <summary>图标（WinUI <see cref="Symbol"/> 枚举）。</summary>
     public Symbol Icon { get; }
+#endif
 
     /// <summary>点击后导航到的页面类型。</summary>
     public Type PageType { get; }
@@ -39,6 +47,7 @@ public sealed partial class NavItemModel : ObservableObject
     /// <summary>是否固定项（设置 / 关于）：不可拖动、重排后强制归位末尾。</summary>
     public bool IsFixed { get; }
 
+#if !MARUKO_HARNESS
     /// <summary>「设置」项上的新版提醒徽标可见性（启动自动检查发现新版本时点亮）。</summary>
     private Visibility _updateBadgeVisibility = Visibility.Collapsed;
     public Visibility UpdateBadgeVisibility
@@ -62,7 +71,22 @@ public sealed partial class NavItemModel : ObservableObject
         get => _dividerVisibility;
         set => SetProperty(ref _dividerVisibility, value);
     }
+#endif
 
+#if MARUKO_HARNESS
+    /// <summary>
+    /// Harness 专用无参构造：WinUI 构造函数（Symbol / Pages 类型参数）被 #if 排除，
+    /// 给保留的纯逻辑属性安全默认值（PageType 在 Harness 侧无人使用）。
+    /// </summary>
+    public NavItemModel()
+    {
+        Tag = string.Empty;
+        Label = string.Empty;
+        PageType = typeof(NavItemModel);
+    }
+#endif
+
+#if !MARUKO_HARNESS
     public NavItemModel(string tag, string label, Symbol icon, Type pageType, bool isFixed = false)
     {
         Tag = tag;
@@ -98,4 +122,5 @@ public sealed partial class NavItemModel : ObservableObject
     /// <summary>默认顺序的 Tag 列表（用于校验 / 重建已存顺序）。</summary>
     public static IReadOnlyList<string> DefaultFeatureTags { get; } =
         DefaultFeatures.Select(f => f.Tag).ToList();
+#endif
 }
