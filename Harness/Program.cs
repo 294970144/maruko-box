@@ -1,5 +1,6 @@
 using MarukoBox.Services;
 using MarukoBox.Models;
+using MarukoBox.Helpers;
 using System.Diagnostics;
 
 // ---------- 通知发送结果策略回归：不依赖 Windows Shell 的纯逻辑校验 ----------
@@ -26,6 +27,111 @@ if (notificationPolicyFailures > 0)
 if (args.Any(a => a.Equals("notification", StringComparison.OrdinalIgnoreCase)))
 {
     return 0;
+}
+
+// ---------- C5 回归：输出路径与源文件同一性判定（v1.10.7 修复） ----------
+// C5：手动输出路径与源文件相同时 ffmpeg -y 会静默覆写源文件。IsSamePath 提为 public
+// 供 Trim/Mux 的 StartAsync 入口拦截；这里直接断言判定逻辑（同路径/大小写/不同卷/空值）。
+Console.WriteLine("=== C5 回归：输出/源路径同一性判定 ===");
+var c5Cases = new (string? A, string? B, bool Expected)[]
+{
+    (@"C:\videos\a.mp4", @"C:\videos\a.mp4", true),
+    (@"C:\videos\a.mp4", @"c:\VIDEOS\A.MP4", true),
+    (@"C:\videos\a.mp4", @"C:\videos\a_out.mp4", false),
+    (@"C:\videos\a.mp4", @"D:\videos\a.mp4", false),
+    (@"C:\videos\a.mp4", "", false),
+    ("", "", false),
+    (null, null, false),
+};
+var c5Fails = 0;
+foreach (var c in c5Cases)
+{
+    var actual = OutputNaming.IsSamePath(c.A, c.B);
+    var pass = actual == c.Expected;
+    if (!pass)
+    {
+        c5Fails++;
+    }
+
+    Console.WriteLine($"  {(pass ? "PASS" : "FAIL")} '{c.A ?? "null"}' vs '{c.B ?? "null"}' -> {actual}（期望 {c.Expected}）");
+}
+Console.WriteLine($"  C5 路径同一性: {(c5Fails == 0 ? "PASS" : $"FAIL ({c5Fails} 项)")}");
+
+// ---------- C4 回归：更新下载 URL 白名单（v1.10.7 修复） ----------
+// C4：下载地址必须 https + 主机白名单，挡 http 降级与跳域（含 github.com.evil.com 后缀伪装）。
+Console.WriteLine("=== C4 回归：下载 URL 白名单 ===");
+var c4Cases = new (string Url, bool Expected)[]
+{
+    ("https://github.com/294970144/maruko-box/releases/download/v1.10.7/MarukoBoxSetup-Inno_1.10.7.exe", true),
+    ("https://objects.githubusercontent.com/release-assets/abc", true),
+    ("https://sub.githubusercontent.com/x", true),
+    ("https://api.github.com/repos/294970144/maruko-box/releases/latest", true),
+    ("https://gitee.com/zhang-lin701442/maruko-box/releases/download/v1.10.7/x.exe", true),
+    ("https://mirror.lzu.edu.cn/jellyfin/ffmpeg/windows/8.x/x.zip", true),
+    ("http://github.com/x.exe", false),
+    ("https://evil.com/x.exe", false),
+    ("https://github.com.evil.com/x.exe", false),
+    ("https://gitee.com.attacker.net/x.exe", false),
+    ("https://evilgithub.com/x.exe", false),
+    ("ftp://github.com/x.exe", false),
+    ("not a url", false),
+    ("", false),
+};
+var c4Fails = 0;
+foreach (var c in c4Cases)
+{
+    var actual = UpdateService.IsTrustedDownloadUrl(c.Url);
+    var pass = actual == c.Expected;
+    if (!pass)
+    {
+        c4Fails++;
+    }
+
+    Console.WriteLine($"  {(pass ? "PASS" : "FAIL")} {c.Url} -> {actual}（期望 {c.Expected}）");
+}
+Console.WriteLine($"  C4 URL 白名单: {(c4Fails == 0 ? "PASS" : $"FAIL ({c4Fails} 项)")}");
+
+// ---------- C1 回归：字幕编码器与扩展名选择（v1.10.7 修复） ----------
+// C1：内嵌按输出容器选 -c:s（mp4/mov/m4v→mov_text，其余→srt）；抽取按流编码器定后缀。
+Console.WriteLine("=== C1 回归：字幕编码器/扩展名选择 ===");
+var c1Fails = 0;
+foreach (var (ext, expected) in new (string Ext, string Expected)[]
+         {
+             (".mp4", "mov_text"), (".MP4", "mov_text"), (".mov", "mov_text"), (".m4v", "mov_text"),
+             (".mkv", "srt"), (".srt", "srt"), ("", "srt"),
+         })
+{
+    var actual = FfmpegService.SelectSubtitleCodec(ext);
+    var pass = actual == expected;
+    if (!pass)
+    {
+        c1Fails++;
+    }
+
+    Console.WriteLine($"  {(pass ? "PASS" : "FAIL")} 内嵌 {ext} -> {actual}（期望 {expected}）");
+}
+foreach (var (codec, expected) in new (string Codec, string Expected)[]
+         {
+             ("subrip", ".srt"), ("srt", ".srt"), ("mov_text", ".srt"), ("webvtt", ".srt"),
+             ("ass", ".ass"), ("ssa", ".ass"), ("pgs", ".sup"), ("dvd_subtitle", ".sub"),
+             ("unknown_codec", ".srt"),
+         })
+{
+    var actual = FfmpegService.GetStreamExtension(
+        new MediaStreamInfo { Type = StreamType.Subtitle, Codec = codec });
+    var pass = actual == expected;
+    if (!pass)
+    {
+        c1Fails++;
+    }
+
+    Console.WriteLine($"  {(pass ? "PASS" : "FAIL")} 抽取 {codec} -> {actual}（期望 {expected}）");
+}
+Console.WriteLine($"  C1 字幕选择: {(c1Fails == 0 ? "PASS" : $"FAIL ({c1Fails} 项)")}");
+
+if (c5Fails + c4Fails + c1Fails > 0)
+{
+    return 1;
 }
 
 // 场景开关：`update` = 更新链路冒烟（软件更新查询 + NVENC 门槛矩阵 + ffmpeg 更新）；

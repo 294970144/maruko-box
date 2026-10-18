@@ -929,7 +929,7 @@ public sealed partial class UpdateService : IUpdateService
     /// 兰州大学 ffmpeg 镜像。远程响应带回的 URL（Release JSON 的 browser_download_url、
     /// 重定向 Location）一律先过 <see cref="EnsureTrustedDownloadUrl"/>。
     /// </summary>
-    private static bool IsTrustedDownloadUrl(string url) =>
+    internal static bool IsTrustedDownloadUrl(string url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri)
         && uri.Scheme == Uri.UriSchemeHttps
         && (uri.Host is "github.com" or "api.github.com" or "gitee.com" or "mirror.lzu.edu.cn"

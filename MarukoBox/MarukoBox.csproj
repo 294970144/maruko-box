@@ -131,4 +131,13 @@
     -->
     <PublishTrimmed>False</PublishTrimmed>
   </PropertyGroup>
+
+  <!-- 【C1/C4 回归断言】让 Harness（同方案手工冒烟 runner）能调用内部纯逻辑成员：
+       UpdateService.IsTrustedDownloadUrl / FfmpegService.SelectSubtitleCodec / GetStreamExtension。
+       不放开 public，仅测试程序集可见。 -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>MarukoBox.Harness</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>
