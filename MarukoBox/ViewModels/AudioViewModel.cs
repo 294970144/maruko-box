@@ -193,6 +193,7 @@ public partial class AudioViewModel : ObservableObject
 
         IsBusy = true;
         _cts = new CancellationTokenSource();
+        ProcessLifetimeGuard.RegisterTask(_cts);
         StatusText = "开始转码…";
 
         // 【C6 修复】同视频页：取消是用户主动行为而非失败，置标志让 finally 保留「已取消」；
@@ -301,6 +302,7 @@ public partial class AudioViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            if (_cts is not null) { ProcessLifetimeGuard.UnregisterTask(_cts); }
             _cts?.Dispose();
             _cts = null;
             // 【v1.4.1 / B3 修复 · 音频页补齐】出错时必须保留 catch 里写入的具体原因。

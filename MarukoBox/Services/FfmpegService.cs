@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using MarukoBox.Helpers;
 using MarukoBox.Models;
 
 namespace MarukoBox.Services;
@@ -26,6 +27,11 @@ public interface IFfmpegService
         GpuInfo gpuInfo,
         IProgress<EncodeProgress> progress,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// 【C7 修复】正在运行的 ffmpeg 长任务数（秒级探测不计入），供关窗守卫全局判断。
+    /// </summary>
+    int ActiveJobCount { get; }
 
     /// <summary>
     /// 解析源文件中的媒体流列表（用于「抽取」页选择轨道）。
@@ -602,9 +608,30 @@ public class FfmpegService : IFfmpegService
         }
     }
 
+    /// <summary>【C7 修复】在飞 ffmpeg 长任务计数的作用域：进入 +1，方法退出（含异常/取消）时 -1。</summary>
+    private readonly struct ActiveJobScope : IDisposable
+    {
+        public static ActiveJobScope Enter()
+        {
+            Interlocked.Increment(ref _activeJobCount);
+            return new ActiveJobScope();
+        }
+
+        public void Dispose() => Interlocked.Decrement(ref _activeJobCount);
+    }
+
+    private static int _activeJobCount;
+
+    /// <summary>
+    /// 【C7 修复】正在运行的 ffmpeg 长任务数（编码 / 转码 / 裁剪 / 封装 / 字幕 / 抽取 / 抽帧；
+    /// 秒级探测不计入）。关窗守卫据此做全局判断，不依赖「当前页是否有任务」。
+    /// 计数用静态字段（全进程唯一 Job），此处以实例属性实现接口成员。
+    /// </summary>
+    public int ActiveJobCount => Volatile.Read(ref _activeJobCount);
+
     /// <summary>
     /// ffmpeg 进程执行核心：启动进程、解析实时进度、支持取消。
-    /// 视频编码 / 轨道抽取 / 音频转码 共用此方法，保证进度解析、取消与异常防护一致。
+    /// 视频编码 / 轨道抽取 / 音频转码 / 字幕 / 封装 / 抽帧 共用此方法，保证进度解析、取消与异常防护一致。
     /// <para>
     /// 注意：进度回调（<paramref name="progress"/>）可能被后台线程触发，
     /// 调用方负责把回调内容封送到 UI 线程（见 <see cref="App.RunOnUiThread"/>）。
@@ -736,6 +763,12 @@ public class FfmpegService : IFfmpegService
             progress.Report(current);
             return false;
         }
+
+        // 【C7 修复】加入 Job（KILL_ON_JOB_CLOSE）：主进程以任何路径退出时由内核连带终止
+        // 本子进程，杜绝孤儿 ffmpeg 继续写盘；同时计入在飞任务数供关窗守卫全局判断
+        // （原来只认「当前页」，切标签页后退款即失控）。
+        ProcessLifetimeGuard.AssignToJob(process);
+        using var jobScope = ActiveJobScope.Enter();
 
         // 取消时终止进程树
         await using var registration = ct.Register(() =>
@@ -928,6 +961,9 @@ public class FfmpegService : IFfmpegService
         {
             return result;
         }
+
+        // 【C7 修复】加入 Job：探测也可能挂起，退出时由内核兜底终止
+        ProcessLifetimeGuard.AssignToJob(process);
 
         // v1.4.1（B5）：取消时必须终止 ffmpeg 子进程。此前只 catch 了
         // OperationCanceledException 就继续往下解析，若探测的是网络路径或损坏文件
@@ -1225,6 +1261,9 @@ public class FfmpegService : IFfmpegService
             return info;
         }
 
+        // 【C7 修复】加入 Job：探测挂起时退出由内核兜底终止
+        ProcessLifetimeGuard.AssignToJob(process);
+
         // v1.4.1（B5）：同 ProbeStreamsAsync，取消时终止子进程。
         await using var registration = ct.Register(() =>
         {
@@ -1340,9 +1379,7 @@ public class FfmpegService : IFfmpegService
         // 视频与字幕合并：视音频流直接复制；字幕按输出容器选编码器——
         // 【C1 修复】mp4/mov 的 muxer 没有 subrip tag，-c copy 必报
         // "Could not find tag for codec subrip"，需转 mov_text；mkv 等用 srt。
-        var subCodec = Path.GetExtension(outputVideo).ToLowerInvariant() is ".mp4" or ".mov" or ".m4v"
-            ? "mov_text"
-            : "srt";
+        var subCodec = SelectSubtitleCodec(Path.GetExtension(outputVideo));
         var sb = new StringBuilder(
             $"-i \"{videoPath}\" -i \"{subtitlePath}\" -map 0 -map 1 -c copy -c:s {subCodec} -y \"{outputVideo}\"");
 
@@ -1371,9 +1408,16 @@ public class FfmpegService : IFfmpegService
     }
 
     /// <summary>
+    /// 【C1 修复】字幕内嵌按输出容器选编码器：mp4/mov/m4v 的 muxer 没有 subrip tag，
+    /// 必须转 mov_text；mkv 等容器用 srt（视音频保持 copy，由调用方拼 -c:s）。
+    /// </summary>
+    internal static string SelectSubtitleCodec(string outputExtension) =>
+        outputExtension.ToLowerInvariant() is ".mp4" or ".mov" or ".m4v" ? "mov_text" : "srt";
+
+    /// <summary>
     /// 根据流类型与编码决定抽取后的文件后缀，尽量选兼容容器。
     /// </summary>
-    private static string GetStreamExtension(MediaStreamInfo s)
+    internal static string GetStreamExtension(MediaStreamInfo s)
     {
         if (s.Type == StreamType.Subtitle)
         {

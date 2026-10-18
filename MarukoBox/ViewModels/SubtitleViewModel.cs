@@ -150,6 +150,7 @@ public partial class SubtitleViewModel : ObservableObject
 
         IsBusy = true;
         _cts = new CancellationTokenSource();
+        ProcessLifetimeGuard.RegisterTask(_cts);
         StatusText = "开始抽取字幕…";
 
         try
@@ -166,6 +167,7 @@ public partial class SubtitleViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            if (_cts is not null) { ProcessLifetimeGuard.UnregisterTask(_cts); }
             _cts?.Dispose();
             _cts = null;
         }
@@ -204,6 +206,7 @@ public partial class SubtitleViewModel : ObservableObject
 
         IsBusy = true;
         _cts = new CancellationTokenSource();
+        ProcessLifetimeGuard.RegisterTask(_cts);
         StatusText = "开始嵌入字幕…";
 
         try
@@ -223,6 +226,7 @@ public partial class SubtitleViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            if (_cts is not null) { ProcessLifetimeGuard.UnregisterTask(_cts); }
             _cts?.Dispose();
             _cts = null;
         }
@@ -261,6 +265,7 @@ public partial class SubtitleViewModel : ObservableObject
 
         IsBusy = true;
         _cts = new CancellationTokenSource();
+        ProcessLifetimeGuard.RegisterTask(_cts);
         StatusText = "开始转换字幕…";
 
         try
@@ -280,6 +285,7 @@ public partial class SubtitleViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            if (_cts is not null) { ProcessLifetimeGuard.UnregisterTask(_cts); }
             _cts?.Dispose();
             _cts = null;
         }

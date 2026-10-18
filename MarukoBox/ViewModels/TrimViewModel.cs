@@ -502,6 +502,7 @@ public partial class TrimViewModel : ObservableObject
 
         IsBusy = true;
         _cts = new CancellationTokenSource();
+        ProcessLifetimeGuard.RegisterTask(_cts);
         StatusText = FastMode ? "快速剪切中…" : "精确剪切中（重新编码画面）…";
 
         try
@@ -556,6 +557,7 @@ public partial class TrimViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            if (_cts is not null) { ProcessLifetimeGuard.UnregisterTask(_cts); }
             _cts?.Dispose();
             _cts = null;
         }

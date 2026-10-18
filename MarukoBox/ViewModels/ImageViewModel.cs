@@ -123,6 +123,7 @@ public partial class ImageViewModel : ObservableObject
 
         IsBusy = true;
         _cts = new CancellationTokenSource();
+        ProcessLifetimeGuard.RegisterTask(_cts);
         StatusText = "开始抽帧…";
 
         try
@@ -138,6 +139,7 @@ public partial class ImageViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            if (_cts is not null) { ProcessLifetimeGuard.UnregisterTask(_cts); }
             _cts?.Dispose();
             _cts = null;
         }
@@ -174,6 +176,7 @@ public partial class ImageViewModel : ObservableObject
 
         IsBusy = true;
         _cts = new CancellationTokenSource();
+        ProcessLifetimeGuard.RegisterTask(_cts);
         StatusText = "开始转码…";
 
         try
@@ -193,6 +196,7 @@ public partial class ImageViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            if (_cts is not null) { ProcessLifetimeGuard.UnregisterTask(_cts); }
             _cts?.Dispose();
             _cts = null;
         }

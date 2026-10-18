@@ -25,5 +25,8 @@
     <Compile Include="..\MarukoBox\Services\*.cs" />
     <Compile Include="..\MarukoBox\Helpers\OutputNaming.cs" />
     <Compile Include="..\MarukoBox\Helpers\OutputPathHelper.cs" />
+    <!-- 【C7 修复】FfmpegService 引用的子进程生命周期兜底（Job Object + 取消注册表），
+         零 WinUI 依赖（仅 P/Invoke + AppStub 的日志），需一并纳入 -->
+    <Compile Include="..\MarukoBox\Helpers\ProcessLifetimeGuard.cs" />
   </ItemGroup>
 </Project>

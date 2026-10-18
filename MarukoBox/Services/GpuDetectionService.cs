@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using MarukoBox.Helpers;
 using MarukoBox.Models;
 
 namespace MarukoBox.Services;
@@ -326,6 +327,9 @@ public class GpuDetectionService : IGpuDetectionService
         using var process = Process.Start(psi)
             ?? throw new InvalidOperationException($"无法启动进程：{fileName}");
 
+        // 【C7 修复】加入 Job：探测进程挂起或主进程猝死时由内核兜底终止
+        ProcessLifetimeGuard.AssignToJob(process);
+
         // 与 RunAsync 同样必须并发抽干两个流，否则缓冲区满会令进程永不退出。
         var outTask = process.StandardOutput.ReadToEndAsync(ct);
         var errTask = process.StandardError.ReadToEndAsync(ct);
@@ -362,6 +366,9 @@ public class GpuDetectionService : IGpuDetectionService
 
         using var process = Process.Start(psi)
             ?? throw new InvalidOperationException($"无法启动进程：{fileName}");
+
+        // 【C7 修复】加入 Job：探测进程挂起或主进程猝死时由内核兜底终止
+        ProcessLifetimeGuard.AssignToJob(process);
 
         // v1.4.1 修复：stdout 与 stderr 必须并发读取，否则任一流（默认 4KB）缓冲区
         // 填满后 ffmpeg 会阻塞写、进程永不退出；同时 ffmpeg 的 -version / -i 等文本

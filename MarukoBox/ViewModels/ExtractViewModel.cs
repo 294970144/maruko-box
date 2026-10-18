@@ -133,6 +133,7 @@ public partial class ExtractViewModel : ObservableObject
 
         IsBusy = true;
         _cts = new CancellationTokenSource();
+        ProcessLifetimeGuard.RegisterTask(_cts);
         StatusText = "开始抽取…";
 
         try
@@ -176,6 +177,7 @@ public partial class ExtractViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            if (_cts is not null) { ProcessLifetimeGuard.UnregisterTask(_cts); }
             _cts?.Dispose();
             _cts = null;
         }

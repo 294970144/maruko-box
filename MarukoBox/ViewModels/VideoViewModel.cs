@@ -634,6 +634,7 @@ public partial class VideoViewModel : ObservableObject
 
         SyncToSettings();
         _cts = new CancellationTokenSource();
+        ProcessLifetimeGuard.RegisterTask(_cts);
         IsEncoding = true;
         StatusText = "开始编码…";
 
@@ -748,6 +749,7 @@ public partial class VideoViewModel : ObservableObject
         finally
         {
             IsEncoding = false;
+            if (_cts is not null) { ProcessLifetimeGuard.UnregisterTask(_cts); }
             _cts?.Dispose();
             _cts = null;
 

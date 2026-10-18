@@ -99,39 +99,30 @@ public sealed partial class MainWindow : Window
             await Task.Delay(200);
         }
 
+        if (IsJobRunning())
+        {
+            // 超时仍未收敛：不无限等待——Job Object 会在进程退出时内核级终止全部子进程
+            App.LogInfo("关窗拦截：等待任务收敛超时，交由 Job Object 兜底终止");
+        }
+
         _closeApproved = true;
 
         // 走统一退出链：会话落盘 → 关窗（此次放行）→ 通知通道注销 → 兜底终止进程
         App.Shutdown();
     }
 
-    /// <summary>【C7 修复】当前页是否有正在运行的任务（工具页为秒级探测，不计入）。</summary>
-    private bool IsJobRunning() => ContentFrame.Content switch
-    {
-        VideoPage v => v.ViewModel.IsEncoding,
-        AudioPage a => a.ViewModel.IsBusy,
-        TrimPage t => t.ViewModel.IsBusy,
-        MuxPage m => m.ViewModel.IsBusy,
-        SubtitlePage s => s.ViewModel.IsBusy,
-        ExtractPage x => x.ViewModel.IsBusy,
-        ImagePage i => i.ViewModel.IsBusy,
-        _ => false
-    };
+    /// <summary>
+    /// 【C7 修复·补全】是否有任何 ffmpeg 长任务在跑（全局计数，不限当前页）。
+    /// 原实现只看当前页 VM——切到其它标签页后关窗、或经 App.Shutdown() 的退出，
+    /// 后台 VM 里的编码继续跑，孤儿进程照旧。任务计数由 FfmpegService 统一维护。
+    /// </summary>
+    private bool IsJobRunning() => AppServices.Ffmpeg.ActiveJobCount > 0;
 
-    /// <summary>【C7 修复】取消当前页正在运行的任务（各 VM 由 [RelayCommand] 生成的 CancelCommand）。</summary>
-    private void CancelActiveJob()
-    {
-        switch (ContentFrame.Content)
-        {
-            case VideoPage v: v.ViewModel.CancelCommand.Execute(null); break;
-            case AudioPage a: a.ViewModel.CancelCommand.Execute(null); break;
-            case TrimPage t: t.ViewModel.CancelCommand.Execute(null); break;
-            case MuxPage m: m.ViewModel.CancelCommand.Execute(null); break;
-            case SubtitlePage s: s.ViewModel.CancelCommand.Execute(null); break;
-            case ExtractPage x: x.ViewModel.CancelCommand.Execute(null); break;
-            case ImagePage i: i.ViewModel.CancelCommand.Execute(null); break;
-        }
-    }
+    /// <summary>
+    /// 【C7 修复·补全】取消全部已注册任务（各 VM StartAsync 里注册的 CTS）。
+    ///  Job Object 是退出时的内核级兜底；这里尽力让任务优雅停止，避免半成品输出。
+    /// </summary>
+    private void CancelActiveJob() => ProcessLifetimeGuard.CancelAllTasks();
 
     /// <summary>
     /// 将窗口提到前台（系统通知被点击时调用）。
