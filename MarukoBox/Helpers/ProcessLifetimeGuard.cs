@@ -46,13 +46,21 @@ internal static class ProcessLifetimeGuard
     /// <summary>把已启动的子进程分配给 Job。失败仅记录日志，不阻断业务流程。</summary>
     internal static void AssignToJob(Process process)
     {
-        if (JobHandle == IntPtr.Zero || !process.HasExited)
+        if (JobHandle == IntPtr.Zero)
         {
             return;
         }
 
         try
         {
+            // 已退出的进程没有可分配对象（AssignProcessToJobObject 对其必然失败）。
+            // 注意方向：原实现写成 !HasExited，会让所有运行中的子进程直接 return，
+            // Job 兜底形同虚设（2026-11-03 复核发现）。
+            if (process.HasExited)
+            {
+                return;
+            }
+
             if (!AssignProcessToJobObject(JobHandle, process.Handle))
             {
                 // 调试器/某些宿主会把进程并入自己的 Job 导致拒绝；此时退出仍依赖取消路径
