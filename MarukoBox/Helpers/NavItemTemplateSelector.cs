@@ -6,7 +6,7 @@ namespace MarukoBox.Helpers;
 
 /// <summary>
 /// 侧栏导航项的模板选择器：功能页走普通模板，固定系统项（设置 / 关于）
-/// 走带顶部分组分隔线与徽标位的模板。
+/// 走带徽标位的模板。分组分隔线不在这里（由 pane 里独立的一行 Border 绘制）。
 /// </summary>
 public sealed class NavItemTemplateSelector : DataTemplateSelector
 {

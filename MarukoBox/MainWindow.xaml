@@ -72,46 +72,43 @@
                     </Grid>
                 </DataTemplate>
 
-                <!-- 固定系统项模板（设置 / 关于）：设置项上方带分组分隔线，尾部带新版 / 重启徽标 -->
+                <!-- 固定系统项模板（设置 / 关于）：尾部带新版 / 重启徽标。
+                     分组分隔线**不在这里**：它曾是本模板顶部的 Rectangle，把系统项高度从
+                     40 顶到 57，导致选中背景比普通项高一截、图标文字整体偏下。现已改由
+                     PaneCustomContent 里独立的一行 Border 绘制——分隔线完全在条目之外，
+                     条目边界回归 40px，选中背景与内容自然对齐。 -->
                 <DataTemplate x:Key="NavSystemTemplate" x:DataType="models:NavItemModel">
-                    <StackPanel>
-                        <Rectangle
-                            Height="1"
-                            Margin="0,8,0,8"
-                            Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
-                            Visibility="{x:Bind DividerVisibility, Mode=OneWay}" />
-                        <Grid ColumnSpacing="14" VerticalAlignment="Center">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <Viewbox
-                                Width="16"
-                                Height="16"
-                                VerticalAlignment="Center">
-                                <SymbolIcon Symbol="{x:Bind Icon}" />
-                            </Viewbox>
-                            <TextBlock
-                                Grid.Column="1"
-                                VerticalAlignment="Center"
-                                Text="{x:Bind Label}" />
-                            <StackPanel
-                                Grid.Column="2"
-                                VerticalAlignment="Center"
-                                Orientation="Horizontal"
-                                Spacing="6">
-                                <!-- 新版提醒：启动自动检查发现新版本时点亮 -->
-                                <InfoBadge
-                                    Style="{ThemeResource AttentionDotInfoBadgeStyle}"
-                                    Visibility="{x:Bind UpdateBadgeVisibility, Mode=OneWay}" />
-                                <!-- 重启提醒：主题 / 用户级别改后选「稍后重启」时点亮 -->
-                                <InfoBadge
-                                    Style="{ThemeResource AttentionDotInfoBadgeStyle}"
-                                    Visibility="{x:Bind RestartBadgeVisibility, Mode=OneWay}" />
-                            </StackPanel>
-                        </Grid>
-                    </StackPanel>
+                    <Grid ColumnSpacing="14" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Viewbox
+                            Width="16"
+                            Height="16"
+                            VerticalAlignment="Center">
+                            <SymbolIcon Symbol="{x:Bind Icon}" />
+                        </Viewbox>
+                        <TextBlock
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Text="{x:Bind Label}" />
+                        <StackPanel
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="6">
+                            <!-- 新版提醒：启动自动检查发现新版本时点亮 -->
+                            <InfoBadge
+                                Style="{ThemeResource AttentionDotInfoBadgeStyle}"
+                                Visibility="{x:Bind UpdateBadgeVisibility, Mode=OneWay}" />
+                            <!-- 重启提醒：主题 / 用户级别改后选「稍后重启」时点亮 -->
+                            <InfoBadge
+                                Style="{ThemeResource AttentionDotInfoBadgeStyle}"
+                                Visibility="{x:Bind RestartBadgeVisibility, Mode=OneWay}" />
+                        </StackPanel>
+                    </Grid>
                 </DataTemplate>
 
                 <helpers:NavItemTemplateSelector
@@ -127,37 +124,80 @@
                      表现为「源项呆在原地不动、邻居瞬移，拖动卡与残留卡片重叠」。
                      另：WinUI 3 默认 ListViewItem 自带左缘选中竖条（与 NavigationViewItem 观感一致），
                      无需自行复刻。
-                     注意 MinHeight 而非 Height：系统项因带分隔线更高，需自适应。 -->
+                     注意 MinHeight 而非 Height：条目沿用默认高度，但内容高度只增不减时不裁切。 -->
                 <Style x:Key="NavListItemStyle" TargetType="ListViewItem">
                     <Setter Property="MinHeight" Value="40" />
                     <!-- Padding 经 TemplateBinding 传给 ListViewItemPresenter 的 ContentMargin -->
                     <Setter Property="Padding" Value="10,0,10,0" />
                     <Setter Property="Margin" Value="4,0,4,2" />
-                    <Setter Property="CornerRadius" Value="4" />
+                    <!-- 注意：这里**不能**用 Setter Property="CornerRadius" 改圆角。
+                         WinUI 默认模板里 ListViewItemPresenter 的 CornerRadius 绑的是
+                         {ThemeResource ListViewItemCornerRadius}（默认 4），而不是
+                         {TemplateBinding CornerRadius}——在 ListViewItem 上设 CornerRadius 是死属性，
+                         完全不生效（这正是「圆角看不出来」的原因）。圆角见下方主题资源覆盖。 -->
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                     <Setter Property="VerticalContentAlignment" Value="Center" />
                     <Setter Property="Background" Value="Transparent" />
                 </Style>
+
+                <!-- 圆角：轻量样式只能经主题资源覆盖（模板内是 ThemeResource 查找）。
+                     取值依据 Microsoft Fluent 几何规范：页内元素 4px、浮层 / 顶层容器 8px。
+                     侧栏条目 40px 高、几乎通栏宽，4px 在低对比填充下视觉上接近直角；
+                     取 6px ≈ 高度的 15%，既有圆角感又不至于像移动端胶囊。
+                     左缘选中竖条只有 3px 宽，1.5px 半径等于半圆，改 2 与条目更协调。 -->
+                <CornerRadius x:Key="ListViewItemCornerRadius">6</CornerRadius>
+                <CornerRadius x:Key="ListViewItemSelectionIndicatorCornerRadius">2</CornerRadius>
             </NavigationView.Resources>
 
             <NavigationView.PaneCustomContent>
-                <!-- 侧栏菜单：功能页（可拖拽重排）+ 固定系统项（设置 / 关于，不可拖）。
-                     三件套缺一不可：CanDragItems 起拖、AllowDrop 接受放置、
+                <!-- 侧栏拆成两个 ListView（功能页 / 固定系统项），中间由独立 Border 画分组线。
+                     为什么不放在一个列表里：分隔线若写在系统项模板内，会被算进该 ListViewItem
+                     的边界（40 → 57px），选中背景与左缘竖条随之变高，图标文字相对整块偏下。
+                     拆开后分隔线不属于任何条目，选中背景就是干净的 40px 圆角块。
+                     两个列表共用同一 ItemContainerStyle，视觉一致；选中互斥由代码后置维护。
+                     功能页列表三件套缺一不可：CanDragItems 起拖、AllowDrop 接受放置、
                      CanReorderItems 让落在列表内时按插入位置重排（并自动更新 ItemsSource）。
                      数据源必须 ObservableCollection（List 不会自动更新顺序），
                      ItemsPanel 必须实现 IInsertionPanel（默认面板满足，勿换自定义面板）。 -->
-                <ListView
-                    x:Name="FeatureList"
-                    Padding="0,2,0,2"
-                    AllowDrop="True"
-                    CanDragItems="True"
-                    CanReorderItems="True"
-                    DragItemsCompleted="FeatureList_DragItemsCompleted"
-                    DragItemsStarting="FeatureList_DragItemsStarting"
-                    ItemContainerStyle="{StaticResource NavListItemStyle}"
-                    ItemTemplateSelector="{StaticResource NavItemSelector}"
-                    SelectionChanged="FeatureList_SelectionChanged"
-                    SelectionMode="Single" />
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <ListView
+                        x:Name="FeatureList"
+                        Grid.Row="0"
+                        Padding="0,2,0,2"
+                        AllowDrop="True"
+                        CanDragItems="True"
+                        CanReorderItems="True"
+                        DragItemsCompleted="FeatureList_DragItemsCompleted"
+                        DragItemsStarting="FeatureList_DragItemsStarting"
+                        ItemContainerStyle="{StaticResource NavListItemStyle}"
+                        ItemTemplateSelector="{StaticResource NavItemSelector}"
+                        KeyDown="NavList_KeyDown"
+                        SelectionChanged="FeatureList_SelectionChanged"
+                        SelectionMode="Single" />
+
+                    <!-- 分组分隔线：左缘对齐条目内容（条目 Margin 4 + Padding 10 = 14） -->
+                    <Rectangle
+                        Grid.Row="1"
+                        Height="1"
+                        Margin="14,8,14,8"
+                        Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                    <ListView
+                        x:Name="SystemList"
+                        Grid.Row="2"
+                        Padding="0,0,0,2"
+                        ItemContainerStyle="{StaticResource NavListItemStyle}"
+                        ItemTemplateSelector="{StaticResource NavItemSelector}"
+                        KeyDown="NavList_KeyDown"
+                        SelectionChanged="SystemList_SelectionChanged"
+                        SelectionMode="Single" />
+                </Grid>
             </NavigationView.PaneCustomContent>
 
             <Frame x:Name="ContentFrame" />

@@ -63,14 +63,6 @@ public sealed partial class NavItemModel : ObservableObject
         get => _restartBadgeVisibility;
         set => SetProperty(ref _restartBadgeVisibility, value);
     }
-
-    /// <summary>「设置」项上方的分组分隔线可见性（仅首个系统项显示，区分功能页 / 系统入口）。</summary>
-    private Visibility _dividerVisibility = Visibility.Collapsed;
-    public Visibility DividerVisibility
-    {
-        get => _dividerVisibility;
-        set => SetProperty(ref _dividerVisibility, value);
-    }
 #endif
 
 #if MARUKO_HARNESS
@@ -109,13 +101,10 @@ public sealed partial class NavItemModel : ObservableObject
         new("Trim", "裁剪", Symbol.Crop, typeof(TrimPage)),
     };
 
-    /// <summary>固定系统项（设置 / 关于）：始终位于列表末尾，不参与重排。</summary>
+    /// <summary>固定系统项（设置 / 关于）：独立列表，始终位于功能页之下，不参与重排。</summary>
     public static IReadOnlyList<NavItemModel> DefaultSystemItems { get; } = new List<NavItemModel>
     {
-        new("Settings", "设置", Symbol.Setting, typeof(SettingsPage), isFixed: true)
-        {
-            DividerVisibility = Visibility.Visible, // 功能页 / 系统入口 之间的分组分隔线
-        },
+        new("Settings", "设置", Symbol.Setting, typeof(SettingsPage), isFixed: true),
         new("About", "关于", Symbol.Help, typeof(AboutPage), isFixed: true),
     };
 
