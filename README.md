@@ -95,6 +95,10 @@ unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART                     卸载
 2. **手动配置**：设置页手动指定路径
 3. **PATH**：系统环境变量中的 ffmpeg
 
+## 支持项目
+
+MarukoBox 完全免费且开源。如果你觉得它省了你的时间，可以在 [爱发电](https://afdian.com/a/zhangg) 请我喝杯咖啡；赞助完全自愿，不影响任何功能。
+
 ## 更新日志
 
 各版本变更见 `Installer-Inno/release-notes-*.md`。
